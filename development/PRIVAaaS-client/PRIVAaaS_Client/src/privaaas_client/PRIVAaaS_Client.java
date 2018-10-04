@@ -5,8 +5,12 @@
  */
 package privaaas_client;
 
+import java.io.FileInputStream;
+import java.io.FileReader;
+import java.io.InputStream;
+import java.io.File;
 import java.io.IOException;
-import java.sql.*;
+import javax.json.*;
 
 import br.unicamp.ft.arx.service.*;
 
@@ -21,14 +25,6 @@ public class PRIVAaaS_Client {
      * ATTRTIBUTES
      *************************************************************************/
 
-    /* JDBC driver name to be used and database URL (address and db name) */
-    static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
-    static final String DB_URL      = "jdbc:mysql://localhost/PRIVaaS";
-
-    /*  Database credentials: user and password. */
-    static final String USER = "root";
-    static final String PASS = "password";
-
 
    /**************************************************************************
      * METHODS
@@ -36,82 +32,72 @@ public class PRIVAaaS_Client {
     /**
      * @param args the command line arguments.
      */
-    public static void main(String[] args) throws Exception, IOException, 
-                                                             SQLException {
-        
-        ResultSetMetaData receivedMd = null;
-        
-        ResultSet receivedRs = null;
-        ResultSet returnedRs = null;
-        
-        Connection conn = null;
-        Statement  stmt = null;
-        
-        String policyFile = args[1];
+    public static void main(String[] args) throws Exception, IOException {
+                                                         
+        String datadbFile = "";
+        String policyFile = "";
 
-        
-        /**/
-        Anonymizer anonymizer = new Anonymizer();
-        
-        try {
-            /* Iniatializing -- register JDBC driver to be used in the code. */
-            Class.forName("com.mysql.jdbc.Driver");
+        /* Excute the arguments parse (six arguments -name value). */
+        if (args.length == 4) {
 
-            /* Open a connection with database. Use the URL and DB password. */
-            conn = DriverManager.getConnection(DB_URL, USER,PASS);
-            conn.setAutoCommit(false);
+            for (int i = 0; i < args.length; i++) {
 
-            /* Creating statement: */
-            stmt = conn.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE, 
-                                        ResultSet.CONCUR_UPDATABLE);
-
-            /* Execute the query, return the resultset interface and get the ta
-               ble metadata. */
-            receivedRs = stmt.executeQuery("SELECT * FROM "+args[0]);
-            receivedMd = receivedRs.getMetaData();
-                
-            /* Get column number from resultset metadata (contain info about the
-               table. */
-            int columnsNumber = receivedMd.getColumnCount();
-                  
-            try {
-                /* ------------- */
-                /* ANONYMIZER !  */
-                /* ------------- */
-                anonymizer.prepare_source(receivedRs);
-                returnedRs = anonymizer.run(policyFile, 300, "");
+                if (args[i].equals("-p")) {
+                    policyFile = args[i+1];
+                }
+                if (args[i].equals("-d")) {
+                    datadbFile = args[i+1];
+                }
             }
-            catch(Exception e) {
-                e.printStackTrace();        
-            }
+
+            /**/
+            JsonObject policyJsonObj = null;
+            
+            try (JsonReader jsonReader =
+                               Json.createReader(new FileReader(policyFile))) {
                 
-            /* Print the returned resultSet: */
-            while (returnedRs.next()) {
-                for (int i = 1; i <= columnsNumber; i++) {
-                    if (i > 1) System.out.print("| ");
-                    String columnValue = returnedRs.getString(i);
-                    System.out.print(columnValue);
+                policyJsonObj = jsonReader.readObject();
+                jsonReader.close();
+                
+            } catch (JsonException e) {
+                System.err.println("Error: " + e + "\nTrace:");
+                System.exit(-1);
+            }           
+            
+            /*
+            *********************
+            The inputstream test:
+            *********************
+            */
+            InputStream csvStream = new FileInputStream(new File(datadbFile));
+            
+            /*
+            *********************
+            Anonymize:
+            *********************
+            */
+            Anonymizer obj = new Anonymizer();
+
+            /* Prepare and execute the anonimization. */
+            obj.prepare_source(csvStream, policyJsonObj);
+            obj.run();
+    
+            /* Get anonymized result. */
+            JsonArray jsonArrayResult = obj.get_json_anonymized();
+            
+            /*
+            *********************
+            Show result:
+            *********************
+            */
+            for(int i = 0; i < jsonArrayResult.size(); i++) {
+                JsonObject jObj = jsonArrayResult.getJsonObject(i);
+                
+                for (String key: jObj.keySet()) {
+                    System.out.print("\""+key+"\":\""+jObj.getString(key)+"\"");
                 }
                 System.out.println("");
-            }
-            
-            stmt.close();
-            conn.close();
-            
-        } catch(SQLException e) {
-            e.printStackTrace();
-
-        } catch(Exception e) {
-            e.printStackTrace();
-
-        } finally {
-            /* Finally block used to close resources. */
-            if (stmt != null) {
-                stmt.close();
-            }
-            if (conn != null) {
-                   conn.close();
-            }
+            }   
         }
     }
 }

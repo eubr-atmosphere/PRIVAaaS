@@ -1,3 +1,3 @@
 USAGE:
 ===
-java -jar dist/arx.jar -datadb files/weekly-usage.csv -policy files/param.csv -k 300 -output test.csv
+java -jar dist/PRIVAaaSAllInOneJar.jar -d test_files/weekly-usage.csv -p test_files/param.csv -o test_01.csv

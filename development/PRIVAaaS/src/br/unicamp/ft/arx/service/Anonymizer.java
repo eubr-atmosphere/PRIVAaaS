@@ -1,15 +1,19 @@
 package br.unicamp.ft.arx.service;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileOutputStream;
+import java.io.File;
 
 import java.sql.*;
+
+import javax.json.*;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
-import java.util.StringTokenizer;
 import java.util.Arrays;
 
 import org.deidentifier.arx.*;
@@ -42,24 +46,24 @@ public class Anonymizer {
      **************************************************************************
      ** DEFINE                                                               **
      **************************************************************************
-    */
-    public static final String FILE_PATH_1 = "arx-poc/hierarchy/birthdate.csv";
-    public static final String FILE_PATH_2 = "arx-poc/hierarchy/age.csv";
-    public static final String FILE_PATH_3 = "arx-poc/hierarchy/custom.csv";
-    
+    */    
     
     /*
      **************************************************************************
      ** ATTRIBUTES                                                           **
      **************************************************************************
     */
-    private long             startTime;
-    private long             stopTime;
-    private int              modeFlag;
-    public Data              dataAll;
+    private long             __startTime;
+    private long             __stopTime;
+    private JsonArray        __policyJsonArray;
+    private int              __k;
     
-    public ResultSetMetaData dataResultsetMetadata;
-    public ResultSet         dataResultset;
+    public boolean            screen = false;
+    public  Data              dataAll;
+    public  ARXResult         result;
+    public  ARXNode           node;
+    public  int               k;
+    
     
     
     /*
@@ -71,11 +75,10 @@ public class Anonymizer {
     
         String saveInFile = "";
         String datadbFile = "";
-        String policyFile = ""; 
-        int    k          =  0;
+        String policyFile = "";
         
         /* Excute the arguments parse (six arguments -name value). */        
-        if (args.length == 8) {
+        if (args.length == 6) {
             
             for (int i = 0; i < args.length; i++) {        
                 
@@ -88,147 +91,62 @@ public class Anonymizer {
                 if (args[i].equals("-d")) {
                     datadbFile = args[i+1];
                 }
-                if (args[i].equals("-k")) {
-                    k = Integer.parseInt(args[i+1]);
-                }
             }
-            try {
-                Anonymizer obj = new Anonymizer();
-                obj.prepare_source(datadbFile, policyFile);
-                obj.run(policyFile, k, saveInFile);
-            }
-            catch (Exception e) {
-                e.printStackTrace ();
-            }
+            
+            Anonymizer obj = new Anonymizer();
+            
+            obj.screen = true;
+            obj.prepare_source(datadbFile, policyFile);
+            obj.run();
+            obj.get_json_anonymized();
+            obj.show_results();
+            obj.save_in_file(saveInFile); 
         }
         else {
             Anonymizer.__print_how_execute();
+            System.exit(-1);
         }
     }
 
 
+    
+    
     /* ********************************************************************* */
     /* PUBLIC METHODS                                                        */
     /* ********************************************************************* */
     /*
-        BRIEF: execute the anonymazation algorithm.
-        -----------------------------------------------------------------------
-        @PARAM policyFile == file with policy used.
-        @PARAM datadbFile == file with dataset to anonymization.
-        @PARAM k          == k value.
-        @PARAM saveIn     == file to save the output.
-    */
-    public ResultSet run(String policyFile, int k, String saveInFile) throws 
-                         Exception, IOException {
-
-        /* Execution stages:
-           -----------------------------------#
-           1 - apply the policies.
-           2 - create a configuration.
-           3 - apply the anonymization.
-           4 - show the results.
-           -----------------------------------#
-        */
-
-        /* Apply all policies receveid from policy file. */
-        this.apply_policies(policyFile);
-
-        /* Creates a new configuration without tuple suppression. After adds a
-           privacy model to the configuration. Allows for a certain percentage
-           of outliers and thus triggers tuple suppression. */
-        ARXConfiguration cfg = ARXConfiguration.create();
-
-        cfg.addPrivacyModel(new KAnonymity(k));
-
-        cfg.setSuppressionLimit(0d);
-
-        /* Mensure exec time: start. */
-        this.startTime = System.currentTimeMillis();
-        
-        /* This class offers several methods to define parameters and execute
-           the ARX algorithm. */
-        ARXAnonymizer anonymizer = new ARXAnonymizer();
-        ARXResult     result     = anonymizer.anonymize(this.dataAll, cfg);
-        ARXNode       node       = result.getGlobalOptimum();
-
-        /* Mensure exec time: End. */
-        this.stopTime = System.currentTimeMillis();
-
-        if (this.modeFlag == 1) {
-            this.show_results(node, result, k, saveInFile);
-            return null;
-        }
-        else {
-            return this.resultset(result);
-        }
-    }
-
-    /*
-     BRIEF: prepare data to anonymization (to resultset).
+     BRIEF: prepare data to anonymization (to CSV inputstream).
      --------------------------------------------------------------------------
-     @PARAM dataResultset == data with resultset to anonymizer.
+     @PARAM inputStreamCSV == CSV input stream.
+     @PARAM policy         == json with policies to apply.
     */
-    public void prepare_source(ResultSet dataResultset) throws 
-                                                     IOException,
-                                                     SQLException, Exception {
+    public void prepare_source(InputStream streamCSV, JsonObject policyJsonObj)
+                                                 throws IOException, Exception {
+
+        /* Get policies' array from json: */
+        this.__policyJsonArray = policyJsonObj.getJsonArray("policy");
         
-        this.modeFlag = 0;
+        /* Get k value. */
+        JsonNumber number = (JsonNumber)policyJsonObj.get("k");
+        this.__k = number.intValue();
         
-        DefaultData data = Data.create();
-        
-        /* Recevie the dataResultset interace and set it as class' attribute. */ 
-        this.dataResultset = dataResultset;
-        
-        /* Get the data resultset metadatas: fields number, columns name etc. */
-        this.dataResultsetMetadata = this.dataResultset.getMetaData();
-        
-        /* Check if autocommit is setted to true. If yes, return an exception.*/
-        Connection conn = this.dataResultset.getStatement().getConnection();
-                
-        /* Verify if the autocommint is "True". If yes, return the exception. */
-        if (conn.getAutoCommit() == true) {
-           throw new Exception("Set autocommit to false to use anonymization!"); 
-        }
-        
-        /* Get column number from resultset. */
-        int columnsNumber = this.dataResultsetMetadata.getColumnCount();
-        
-        /* Create a list of the string and to each columns get the value and in-
-           sert in list of column names. */
-        final String[] dataResultsetHeader = new String[columnsNumber];
-        
-        for (int i = 1; i <= columnsNumber; i++) {
-            dataResultsetHeader[i-1] =
-                                    this.dataResultsetMetadata.getColumnName(i);
-        }
-        
-        /* Add the header to de data! */
-        data.add(dataResultsetHeader);       
-        
-        while (this.dataResultset.next()) {
-            /* Create new list of string! The size is the same of the column. */
-            final String[] row = new String[columnsNumber];
-            
-            for (int i = 1; i <= columnsNumber; i++) {
-                row[i-1] = this.dataResultset.getString(i);
-            }
-            data.add(row);
-        }
-        /* Return the data. */
-        this.dataAll = data;
+        /* Create data from inputStreamCSV: */      
+        this.dataAll = Data.create(streamCSV, Charset.forName("UTF-8"),';');
     }
+    
+    
+    
     
     
     /*
      BRIEF: prepare data to anonymization (to dataset file).
      --------------------------------------------------------------------------
      @PARAM datasetFile == file with data to anonymization.
-     @PARAM policyFile  == file with the policies to apply.
+     @PARAM pFile       == string with json filename.
     */
-    public void prepare_source(String datasetFile,String policyFile) throws 
-                                                                   IOException {
-
-        this.modeFlag = 1;
+    public void prepare_source(String datasetFile, String pFile) throws 
+                                                                   IOException, 
+                                                                   Exception {
         
         /* A factory for connections to the physical data source that this Data
            Source object represents. From dataset create a CVS file. */
@@ -237,150 +155,326 @@ public class Anonymizer {
                                                        ';',
                                                        true);
 
-        try {
-            /* Reads text from a character-input stream,buffering characters so
-               as to provide for the efficient reading of characters, arrays,
-               and lines. */
-            BufferedReader lines=new BufferedReader(new FileReader(policyFile));
-            
-            StringTokenizer policyLineWords;
-            String line;
+        /* Execute the parse in json file, and extract the appropriate fields.*/
+        this.__parse_json_policy(pFile);
+        
+        for (int i = 0; i < this.__policyJsonArray.size(); ++i) {
 
-            String field;
-            String data;
-            
-            while ((line = lines.readLine()) != null) {
-                
-                /* Separete the word by delimiter. The delimiter used was ;. */
-                policyLineWords = new StringTokenizer(line, ";");
-
-                /* Test if there are more tokens available from this tokenizer
-                   's string (policy file line). */
-                while (policyLineWords.hasMoreTokens()) {
-                   field = policyLineWords.nextToken();
-                   data  = policyLineWords.nextToken();
-                   
-                   /* Set the collum type (field) to string. */
-                   source.addColumn(field, DataType.STRING);
-                }
-            }
-            lines.close();
-            
-        } catch (IOException | NumberFormatException e) {}
+            JsonObject node = this.__policyJsonArray.getJsonObject(i);
+            String field = node.getString("field");
+                       
+            /* Set the collum type (field) to string. */
+            source.addColumn(field, DataType.STRING);
+        }
  
-        this.dataAll = Data.create(source);
+        try {
+            this.dataAll = Data.create(source);
+        }
+        catch (java.lang.IllegalArgumentException e) {
+            if (this.screen == true) {
+                System.err.println("Column not found: " + e + "\nTrace:");
+                e.printStackTrace();
+                System.exit(-1);
+            }
+            else {
+                throw new Exception(e); 
+            }
+        }
     }
 
+    
+    
+    
+    /*
+        BRIEF: execute the anonymization algorithm.
+        -----------------------------------------------------------------------
+    */
+    public void run() throws IOException, Exception {
+       
+        /* Apply all policies receveid from policy file. */
+        this.apply_policies();
 
+        /* Creates a new configuration without tuple suppression. After adds a
+           privacy model to the configuration. Allows for a certain percentage
+           of outliers and thus triggers tuple suppression. */
+        ARXConfiguration cfg = ARXConfiguration.create();
+
+        cfg.addPrivacyModel(new KAnonymity(this.__k));
+        cfg.setSuppressionLimit(0d);
+
+        /* Mensure exec time: start. */
+        this.__startTime = System.currentTimeMillis();
+        
+        /* Offers several methods to define params and execute the ARX alg. */
+        ARXAnonymizer anonymizer = new ARXAnonymizer();
+
+        /* Encapsulates the results of an execution of the "ARX algorithm". */
+        try {
+            this.result = anonymizer.anonymize(this.dataAll, cfg);
+            
+        } catch (java.lang.IllegalArgumentException e) {
+            if (this.screen == true) {
+                System.err.println("Errors were found: " + e + "\nTrace:");
+                e.printStackTrace();
+                System.exit(-1);
+            }
+            else {
+                throw new Exception(e); 
+            }
+        }
+    
+        /* Obtain the global optimum (ARXLattice.ARXNode): */
+        this.node  = this.result.getGlobalOptimum();
+
+        /* Mensure exec time: End. */
+        this.__stopTime = System.currentTimeMillis();
+    }
+    
+    
+    
+    
+    
+    /*
+      BRIEF: return the resultset anonymized.
+      ------------------------------------------------------------------------
+    */
+    public JsonArray get_json_anonymized() throws SQLException  {
+        
+        JsonArrayBuilder register = Json.createArrayBuilder();
+        
+        int colNum = this.result.getOutput().getNumColumns();
+        int colRow = this.result.getOutput().getNumRows();
+                
+        String colVal;
+        for (int i = 0; i < colRow; i++ ) {
+            JsonObjectBuilder objectBuilder = Json.createObjectBuilder();
+            
+            for (int j = 0; j < colNum; j++ ) {                
+                colVal = this.result.getOutput().getValue(i,j);
+                
+                /* Get field name: */
+                String field = this.dataAll.getHandle().getAttributeName(j);
+                objectBuilder.add(field, String.valueOf(colVal));
+            }
+            
+            /**/
+            register.add(objectBuilder);
+        }   
+        return register.build();
+    }
+    
+    
+    
+    
+    /*
+      BRIEF: show the result from algorithm execution.
+      ------------------------------------------------------------------------
+    */
+    public void show_results() {
+        
+        int dRowNumber = this.dataAll.getHandle().getNumRows();
+
+        /* Create a population model. Obtain: sample size and the sampling frac-
+           tion value. */        
+        ARXPopulationModel pModel = ARXPopulationModel.create(dRowNumber,0.01d);
+
+        double riskP = this.result.getOutput()
+                                  .getRiskEstimator(pModel)
+                                  .getSampleBasedReidentificationRisk()
+                                  .getEstimatedProsecutorRisk();
+        
+        double riskJ = this.result.getOutput()
+                                  .getRiskEstimator(pModel)
+                                  .getSampleBasedReidentificationRisk()
+                                  .getEstimatedJournalistRisk();
+        
+        double riskM = this.result.getOutput()
+                                  .getRiskEstimator(pModel)
+                                  .getSampleBasedReidentificationRisk()
+                                  .getEstimatedMarketerRisk();
+        
+        /* v0 == lScore, v1 == hScore. */
+        InformationLoss<?> v0 =this.node.getLowestScore();
+        InformationLoss<?> v1 =this.node.getHighestScore();
+        
+        /* Statistic: */
+        StatisticsEquivalenceClasses v2 = this.result
+                               .getOutput(this.node, false).getStatistics()
+                               .getEquivalenceClassStatistics();
+        
+        /* Get the quantity of quasi identiying attrs.Set the string to show.*/
+        int size = 
+            this.dataAll.getDefinition().getQuasiIdentifyingAttributes().size();
+        
+        String v3 = dRowNumber + " records with " + size + " quasi-identifiers";
+        
+        /*The class ARXLattice offers several methods for exploring the soluti-
+          on space and for obtaining information about the properties of trans-
+          formations (represented by the class ARXNode).*/
+        int v4 = this.result.getLattice().getSize();      
+
+        /* Returns whether the search space has been characterized completely
+           (i.e. whether an optimal solution has been determined, not whether
+           all transformations have been materialized).*/
+        boolean v6 = this.result.getLattice().isComplete();
+        
+        /* Get solutions (returns the transformation as an array). */        
+        String v5=Arrays.toString(this.node.getTransformation());
+        
+        /* Time needed to reach the solution. */
+        String v7 = this.result.getTime() + " [ms]";                
+        
+        System.out.println("                                                 ");
+        System.out.println("-- OUTPUT DATA                                   ");
+        System.out.println("================================================ ");
+        System.out.println("- Mixed Risk                                     ");
+        System.out.println("  * Prosecutor re-identification risk: "+ riskP   );
+        System.out.println("  * Journalist re-identification risk: "+ riskJ   );
+        System.out.println("  * Marketer   re-identification risk: "+ riskM   );
+        System.out.println("  * K anonimity .....................: "+ this.__k);
+        System.out.println("                                                 ");
+        System.out.println("- Information Loss                               ");
+        System.out.println("   *.................................: "+v0+"/"+v1);
+        System.out.println("                                                 ");
+        System.out.println("- Statistics                                     ");
+        System.out.println("   *.................................:      " + v2);
+        System.out.println("                                                 ");        
+        System.out.println("- Data:                                          ");
+        System.out.println("   *.................................:      " + v3);
+        System.out.println("                                                 ");
+        System.out.println("- Policies available                             ");
+        System.out.println("   *.................................:      " + v4);
+        System.out.println("                                                 ");
+        System.out.println("- Solution                                       ");
+        System.out.println("  * .................................:      " + v5);
+        System.out.println("  * Optimal..........................:      " + v6);
+        System.out.println("  * Time needed......................:      " + v7);
+        System.out.println("================================================" );
+        System.out.println("Done!");
+        System.out.println("*** Total Execution Time: "
+                                 + (this.__stopTime - this.__startTime)+"[ms]");
+    }
+     
+    
+    
+    
+    /*
+    BRIEF: save the json value in file.
+    ---------------------------------------------------------------------------
+    @PARAM saveIn == file to save the output.
+    */
+    public void save_in_file(String saveInFile) throws Exception {
+        
+        /**/
+        JsonArray jsonArrayResult = this.get_json_anonymized();
+        
+        File file = new File(saveInFile);
+        file.createNewFile();
+
+        try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
+
+            JsonWriter jsonWriter = Json.createWriter(fileOutputStream);
+            
+            jsonWriter.writeArray(jsonArrayResult);
+            jsonWriter.close();
+
+            /* Flush and close file output streams. */
+            fileOutputStream.flush();
+            fileOutputStream.close();
+        }
+        catch (Exception e) {
+            if (this.screen == true) {
+                System.err.println("Error: " + e + "\nTrace:");
+                e.printStackTrace();
+                System.exit(-1);
+            }
+            else {
+                throw new Exception(e); 
+            }
+        }
+    }    
+    
+
+    
+    
     /* ********************************************************************* */
     /* PROTECTED METHODS                                                     */
     /* ********************************************************************* */
     /*
     BRIEF: apply the policies defineds in the policy file.
     ----------------------------------------------------------------------------
-    @PARAM policyFile == file with policies to apply.
     */        
-    protected void apply_policies(String policyFile) {
+    protected void apply_policies() throws IOException {
         
-        try {
+        for (int i = 0; i < this.__policyJsonArray.size(); ++i) {
+
+            JsonObject node = this.__policyJsonArray.getJsonObject(i);
             
-            BufferedReader lines=new BufferedReader(new FileReader(policyFile));
-
-            StringTokenizer policyLineWords;
-            String line                    ;
-            
-            String field;
-            String data ;
-
-            while ((line = lines.readLine()) != null) {
-
-                /* Separete the word by delimiter. The delimiter is ';'. */
-                policyLineWords = new StringTokenizer(line, ";");
-
-                while (policyLineWords.hasMoreTokens()) {
-                                        
-                    field = policyLineWords.nextToken();
-                    data  = policyLineWords.nextToken();
-
-                    switch (data) {
-                        case "1" :
-                            /* Insensitive attributes will be kept as is. */
-                            this.apply_insensitive_attr(field);
-                            break;
+            String field = node.getString("field");
+            String data  = node.getString("data" );
+                       
+            switch (data) {
+                case "1" :
+                    /* Insensitive attrs will be kept as is. */
+                    this.apply_insensitive_attr(field);
+                    break;
                                
-                        case "2" :
-                            /* Directly-identifying attributes will be removed
-                            from the dataset. */
-                            this.apply_identifying_attr(field);
-                            break;
+                case "2" :
+                case "4" :
+                    /* Directly-identifying attrs will be rm from the dataset.*/
+                    this.apply_identifying_attr(field);
+                    break;
                             
-                               
-                        case "3" :
-                            /* Quasi-identifying attributes will be transformed
-                               by applying the provided generalization hierarch
-                               ies. */
-                            this.apply_quasi_identifying_attr(field);
+                case "3" :
+                    /* Quasi-identifying attrs will be transformed by applying 
+                       the provided generalization hierarch. */
+                    this.apply_quasi_identifying_attr(field);
                             
-                            /* Associates the given microaggregation func. When
-                               configuring microaggregation with this method ge
-                               neralization hierarchies will not be used for cl
-                               ustering attribute values before aggregation. Cr
-                               eates a microaggregation function using generali
-                               zation. Ignores missing data. */
-                            this.apply_micro_aggregation(field);
-                            break;
+                    /* Associates the given microaggregation func. When configu
+                       ring microaggregation with this method generalization hi
+                       erarchies will not be used for clustering attribute valu
+                       es before aggregation. Creates a microaggregation functi
+                       on using generalization. Ignores missing data. */
+                    this.apply_micro_aggregation(field);
+                    break;
                                
-                        case "SR":
-                            /* quasi-identifying attributes will be transformed
-                               by applying the provided generalization hierarch
-                               ies. */
-                            this.apply_quasi_identifying_attr(field);
+                case "SR":
+                    /* Quasi-identifying attrs will be transformed by applying 
+                       the provided generalization hierarchies. */
+                    this.apply_quasi_identifying_attr(field);
                             
-                            /* Enables building hierarchies for categorical and
-                               non-categorical values using redaction (order is
-                               left-to-right). Apply the suppressing. */
-                            this.apply_hierarchy_leftToRight_attr(field);
-                            break;
+                    /* Enables building hierarchies for categorical and non-ca-
+                       tegorical values using redaction(order is left-to-right).
+                       Apply the suppressing. */
+                    this.apply_hierarchy_leftToRight_attr(field);
+                    break;
                                
-                        case "SL":
-                            /* quasi-identifying attributes will be transformed
-                               by applying the provided generalization hierarch
-                               ies. */
-                            this.apply_quasi_identifying_attr(field);
+                case "SL":
+                    /* Quasi-identifying attributes will be transformed by app
+                       lying the provided generalization hierarchies. */
+                    this.apply_quasi_identifying_attr(field);
                             
-                            /* Enables building hierarchies for categorical and
-                               non-categorical values using redaction (order is
-                               right-to-left). Apply the suppressing. */
-                            this.apply_hierarchy_rightToLeft_attr(field);
-                            break;
-                               
-                        case "DT":
-                            /* load and apply a hierachy from a file (arg). */
-                            this.apply_hierarchy_attr(field, this.FILE_PATH_1);
-                            break;
-                               
-                        case "AG":
-                            /* load and apply a hierachy from a file (arg). */
-                            this.apply_hierarchy_attr(field, this.FILE_PATH_2);
-                            break;
-                               
-                        case "CT":
-                            /* load and apply a hierachy from a file (arg). */
-                            this.apply_hierarchy_attr(field, this.FILE_PATH_3);
-                            break;
-                            
-                        default: 
-                            throw new IllegalArgumentException("Invalid value"
-                                                                    + data);
-                    }
-                }
-            }           
-            lines.close();
-            
-        } catch (
-            IOException | NumberFormatException e) {
+                    /* Like apply_hierarchy_leftToRight_attr, but in inverse or
+                       der: right-to-left.*/
+                    this.apply_hierarchy_rightToLeft_attr(field);
+                    break;
+                    
+                case "AG":
+                case "DT":                    
+                case "CT":
+                    String hierarchyFile = node.getString("hierarchy_file");
+                    
+                    /* load and apply a custom hierarchy from a file (arg).*/
+                    this.apply_hierarchy_attr(field, hierarchyFile);
+                    break;
+
+                default: 
+                    throw new IllegalArgumentException("Invalid value"+ data);
+            }
         }
     }
+    
+    
     
     
     /*
@@ -395,6 +489,8 @@ public class Anonymizer {
     }
     
     
+    
+    
     /*
     BRIEF: directly-identifying attributes will be removed from the dataset.
     ----------------------------------------------------------------------------
@@ -407,7 +503,9 @@ public class Anonymizer {
     }
     
     
-/*
+    
+    
+    /*
     BRIEF: quasi-identifying attributes will be transformed by applying the 
            provided generalization hierarchies.
     ----------------------------------------------------------------------------
@@ -420,6 +518,8 @@ public class Anonymizer {
     }
 
 
+    
+    
     /*
     BRIEF: load and apply a hierachy from a file.
     ----------------------------------------------------------------------------
@@ -433,8 +533,10 @@ public class Anonymizer {
     }
 
 
+    
+    
     /*
-    BRIEF: Enables building hierarchies for categorical and non-categorical va
+    BRIEF: Enables building hierarchies for categorical and non-categorical va-
            lues using redaction (order is left-to-right). Apply the suppressing.
     ----------------------------------------------------------------------------
     @PARAM field == field (column) to apply the attribute.
@@ -450,6 +552,8 @@ public class Anonymizer {
     }
     
 
+    
+    
     /*
     BRIEF: Enables building hierarchies for categorical and non-categorical va
            lues using redaction (order is right-to-left). Apply the suppressing.
@@ -466,6 +570,8 @@ public class Anonymizer {
         this.dataAll.getDefinition().setAttributeType(field, supressing);
     }
 
+    
+    
                   
     /*
     BRIEF: associates the given microaggregation function. When configuring mi
@@ -483,175 +589,6 @@ public class Anonymizer {
     }
     
     
-    /*
-      BRIEF: show the result from algorithm execution.
-      ------------------------------------------------------------------------
-      @PARAM node   == 
-      @PARAM result == result from algorithm apply.
-      @PARAM k      == k anonymization.
-      @PARAM saveIn == file to save the output.
-    */
-    protected void show_results(ARXNode node, ARXResult result, int k,
-                                String saveInFile) {
-        
-        /* Create a population model. Obtain the sample size and the sampling
-           fraction value. */        
-        ARXPopulationModel pModel = 
-                ARXPopulationModel.create(this.dataAll.getHandle().getNumRows(),
-                0.01d);
-
-        double riskP = result.getOutput()
-                             .getRiskEstimator(pModel)
-                             .getSampleBasedReidentificationRisk()
-                             .getEstimatedProsecutorRisk();
-        
-        double riskJ = result.getOutput()
-                             .getRiskEstimator(pModel)
-                             .getSampleBasedReidentificationRisk()
-                             .getEstimatedJournalistRisk();
-        
-        double riskM = result.getOutput()
-                             .getRiskEstimator(pModel)
-                             .getSampleBasedReidentificationRisk()
-                             .getEstimatedMarketerRisk();
-               
-        /*
-        v0 == lScore;
-        v1 == hScore;
-        v2 == statistic;
-        v3 == data;
-        v4 == policy;
-        v5 == solutions;
-        v6 == isComplete;
-        v7 == time needed.
-        */            
-        
-        InformationLoss<?> v0 = result.getGlobalOptimum().getLowestScore ();
-        InformationLoss<?> v1 = result.getGlobalOptimum().getHighestScore();
-        
-        StatisticsEquivalenceClasses v2 = result.getOutput(result.getGlobalOptimum(), false).getStatistics().getEquivalenceClassStatistics();
-        
-        String v3 = "";
-        v3 = v3 + this.dataAll.getHandle().getView().getNumRows();
-        v3 = v3 + " records with ";
-        v3 = v3 + this.dataAll.getDefinition().getQuasiIdentifyingAttributes().size();
-        v3 = v3 + " quasi-identifiers";
-        
-        int     v4 = result.getLattice().getSize();
-        String  v5 = Arrays.toString(node.getTransformation());
-        boolean v6 = result.getLattice().isComplete();
-        String  v7 = result.getTime() + " [ms]";
-        
-        /* PRINT */       
-        System.out.println("");
-        System.out.println("-- OUTPUT DATA \n ==========================="  );
-        System.out.println("- Mixed Risk");
-        System.out.println("  * Prosecutor re-identification risk: " + riskP);
-        System.out.println("  * Journalist re-identification risk: " + riskJ);
-        System.out.println("  * Marketer   re-identification risk: " + riskM);
-        System.out.println("  * K anonimity .....................: " + k    );
-        System.out.println("");
-        System.out.println("- Information Loss " );
-        System.out.println("   *.................................: "+v0+"/"+v1);
-        System.out.println("");
-        System.out.println("- Statistics");
-        System.out.println("   *.................................: " + v2);
-        System.out.println("");        
-        System.out.println("- Data: ");
-        System.out.println("   *.................................: " + v3);
-        System.out.println("");
-        System.out.println("- Policies available ");
-        System.out.println("   *.................................: " + v4);
-        System.out.println("");
-        System.out.println("- Solution ");
-        System.out.println("  * .................................: " + v5);
-        System.out.println("  * Optimal..........................: " + v6);
-        System.out.println("  * Time needed......................: " + v7);
-        System.out.println("================================================");
-        System.out.println("");
-        
-        /* Write to the file: */
-        System.out.print(" - Writing data...");
-        try {
-            result.getOutput(false).save(saveInFile, ';');
-        }   
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        
-        System.out.println("Done!");
-        System.out.println("*** Total Execution Time: " + (this.stopTime - this.startTime)+"[ms]");
-    }
-    
-    
-    /*
-      BRIEF: return the resultset anonymized.
-      ------------------------------------------------------------------------
-      @PARAM result == result from algorithm apply.
-    */
-    protected ResultSet resultset(ARXResult result) throws SQLException  {
-        
-        int colNum = result.getOutput().getNumColumns();
-        
-        /* Return to first result -- rewind. */
-        this.dataResultset.beforeFirst();
-        
-        String colNam;
-        String colVal;
-        
-        int i = 0; 
-        while (this.dataResultset.next()) {    
-            for (int j = 0; j < colNum; j++ ) {
-                colNam = this.dataResultsetMetadata.getColumnLabel(j+1);
-                colVal = result.getOutput().getValue(i,j);
-
-                /* Veriy the type of field: */
-                switch (this.dataResultsetMetadata.getColumnType(j+1)) {
-
-                    case java.sql.Types.LONGNVARCHAR:
-                    case java.sql.Types.LONGVARCHAR:
-                    case java.sql.Types.NCHAR:
-                    case java.sql.Types.CHAR:
-                    case java.sql.Types.VARCHAR:
-                        this.dataResultset.updateString(colNam, colVal);
-                        break;
-                    
-                    case java.sql.Types.BIGINT:
-                    case java.sql.Types.INTEGER:
-                    case java.sql.Types.TINYINT:
-                        break;
-                            
-                    case java.sql.Types.DOUBLE:
-                    case java.sql.Types.REAL:
-                    case java.sql.Types.FLOAT:
-                        break;   
-                        
-                    case java.sql.Types.DATE:
-                        break;    
-
-                    case java.sql.Types.BOOLEAN:
-                        break;
-
-                    default: 
-                        throw new IllegalArgumentException("Invalid Type!");
-                }
-            }
-            
-            try {
-                this.dataResultset.updateRow();
-                
-            } catch (SQLException e) {
-                System.err.println("Can not insert * into type!");
-                e.printStackTrace();
-                return null;
-            }
-            i = i+1;
-        }
-        /* Return to first result -- rewind. */
-        this.dataResultset.beforeFirst();        
-        
-        return this.dataResultset;
-    }    
     
     
     /*
@@ -663,12 +600,47 @@ public class Anonymizer {
         System.err.println("Few arguments received.");
 
         System.out.println("USAGE:");
-        System.out.println("---------------------------------------------");
-        System.out.println("anonymization -k <val> -policy <val> -datadb <val> -output <val>");
-        System.out.println("* -k.....: k-anonymization paramenter (int).");
-        System.out.println("* -policy: policies file path (string).");
-        System.out.println("* -datadb: input    file path (string).");
-        System.out.println("* -output: output   file path (string).");
+        System.out.println("-------------------------------------------------");
+        System.out.println("anonymization -k <val> -p <val> -d <val> -o <val>");
+        System.out.println("* -k: k-anonymization paramenter (int).");
+        System.out.println("* -p: policies filepath (string).");
+        System.out.println("* -d: input    filepath (string).");
+        System.out.println("* -o: output   filepath (string).");
+    }
+    
+    
+    
+    
+    /*
+    BRIEF: execute the json parse.
+    ----------------------------------------------------------------------------
+    @PARAM pFile == file with json content.
+    */
+    private void __parse_json_policy(String pFile) throws FileNotFoundException, 
+                                                          Exception  {
+        
+        JsonObject policyJsonObj = null;
+        
+        try (JsonReader jsonReader = Json.createReader(new FileReader(pFile))) { 
+            policyJsonObj = jsonReader.readObject();
+            jsonReader.close();
+        } catch (JsonException e) {
+            if (this.screen == true) {
+                System.err.println("Error: " + e + "\nTrace:");
+                e.printStackTrace();
+                System.exit(-1);
+            }
+            else {
+                throw new Exception(e); 
+            }
+        }
+        
+        /* Get policies' array from json: */
+        this.__policyJsonArray = policyJsonObj.getJsonArray("policy");
+        
+        /* Get k value. */
+        JsonNumber number = (JsonNumber)policyJsonObj.get("k");
+        this.__k = number.intValue();
     }
 }
 
