@@ -2,7 +2,7 @@
   "k":10,
   "policy":[
      {"field":"id" , "data":"1"},
-     {"field":"c1" , "data":"1"},
+     {"field":"c1" , "data":"SR"},
      {"field":"c2" , "data":"1"},
      {"field":"c3" , "data":"1"},
      {"field":"c4" , "data":"1"},

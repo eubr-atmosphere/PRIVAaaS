@@ -25,7 +25,7 @@
     {"field":"STDs:molluscumcontagiosum", "data":"1"},
     {"field":"STDs:AIDS", "data":"1"},
     {"field":"STDs:HIV", "data":"1"},
-    {"field":"STDs:HepatitisB", "data":"1"},
+    {"field":"STDs:HepatitisB", "data":"SR"},
     {"field":"STDs:HPV", "data":"1"},
     {"field":"STDs:Numberofdiagnosis", "data":"1"},
     {"field":"STDs:Timesincefirstdiagnosis", "data":"1"},
