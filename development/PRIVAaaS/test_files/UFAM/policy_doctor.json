@@ -4,12 +4,12 @@
      {"field":"id"         , "data":"2" },
      {"field":"name"       , "data":"2" },
      {"field":"register"   , "data":"2" },
-     {"field":"birth_date" , "data":"DT", "hierarchy_file":"/home/marcio/projetos/atmosphere_repository/PRIVaaS/development/PRIVAaaS/hierarchy/birthdate.csv"},
-     {"field":"address"    , "data":"SR"},
+     {"field":"birth_date" , "data":"DT", "hierarchy_file":"/Users/taniabasso/hierarchy/birthdate.csv"},
+     {"field":"address"    , "data":"SL"},
      {"field":"city"       , "data":"SR"},
      {"field":"state"      , "data":"SR"},
      {"field":"country"    , "data":"SR"},
-     {"field":"cell_phone" , "data":"SR"},
+     {"field":"cell_phone" , "data":"SL"},
      {"field":"specialty"  , "data":"4" }
   ]
 }
