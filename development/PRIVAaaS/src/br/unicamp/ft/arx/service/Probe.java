@@ -112,7 +112,8 @@ public class Probe {
     *
     */
     private boolean __connect_monitor(String endpoint) {
-        this.client = new BackgroundClient("http://127.0.0.1:5000");
+        this.client = new BackgroundClient("http://127.0.0.1:5000/monitor");
+//        this.client = new SynchronousClient("http://127.0.0.1:5000/monitor");
         this.client.authenticate(2222, "pass".getBytes());
     
         boolean start = this.client.start();
