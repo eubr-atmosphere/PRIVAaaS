@@ -27,9 +27,7 @@ import org.deidentifier.arx.ARXLattice.ARXNode;
 import org.deidentifier.arx.ARXResult;
 import org.deidentifier.arx.AttributeType.Hierarchy;
 import org.deidentifier.arx.Data;
-import org.deidentifier.arx.Data.DefaultData;
 import org.deidentifier.arx.aggregates.StatisticsEquivalenceClasses;
-import org.deidentifier.arx.metric.InformationLoss;
 
 
 
@@ -40,13 +38,18 @@ import org.deidentifier.arx.metric.InformationLoss;
 
 
 
-public class Anonymizer {
+
+
+
+public class Anonymizer extends Probe {
 
     /*
      **************************************************************************
      ** DEFINE                                                               **
      **************************************************************************
     */    
+    public static final String ENDPOINT    = "127.0.0.1";
+    public static final int    RESOURCE_ID = 10203040;
     
     /*
      **************************************************************************
@@ -100,7 +103,7 @@ public class Anonymizer {
             obj.run();
             obj.get_json_anonymized();
             obj.show_results();
-            obj.save_in_file(saveInFile); 
+            obj.save_in_file(saveInFile);
         }
         else {
             Anonymizer.__print_how_execute();
@@ -190,7 +193,7 @@ public class Anonymizer {
         -----------------------------------------------------------------------
     */
     public void run() throws IOException, Exception {
-       
+         
         /* Apply all policies receveid from policy file. */
         this.apply_policies();
 
@@ -294,8 +297,11 @@ public class Anonymizer {
                                   .getEstimatedMarketerRisk();
         
         /* v0 == lScore, v1 == hScore. */
-        InformationLoss<?> v0 =this.node.getLowestScore();
-        InformationLoss<?> v1 =this.node.getHighestScore();
+        //InformationLoss<?> v0 =this.node.getLowestScore().toString();
+        //InformationLoss<?> v1 =this.node.getHighestScore().toString();
+        
+        double v0 = Double.parseDouble(this.node.getLowestScore().toString() );
+        double v1 = Double.parseDouble(this.node.getHighestScore().toString());
         
         /* Statistic: */
         StatisticsEquivalenceClasses v2 = this.result
@@ -319,7 +325,7 @@ public class Anonymizer {
         boolean v6 = this.result.getLattice().isComplete();
         
         /* Get solutions (returns the transformation as an array). */        
-        String v5=Arrays.toString(this.node.getTransformation());
+        String v5 = Arrays.toString(this.node.getTransformation());
         
         /* Time needed to reach the solution. */
         String v7 = this.result.getTime() + " [ms]";                
@@ -353,9 +359,22 @@ public class Anonymizer {
         System.out.println("Done!");
         System.out.println("*** Total Execution Time: "
                                  + (this.__stopTime - this.__startTime)+"[ms]");
+               
+        /* Publish to monitor: k, risk and loss. */
+        int valret = this.publish_message(ENDPOINT,
+                                          System.currentTimeMillis(),
+                                          RESOURCE_ID,
+                                          this.__k,
+                                          riskP, 
+                                          riskJ,
+                                          riskM,
+                                          v0,
+                                          v1);
+        
+        if (valret == 1) {
+            System.out.println("Was not possible publish info to monitor!");
+        }
     }
-     
-    
     
     
     /*
@@ -393,8 +412,6 @@ public class Anonymizer {
             }
         }
     }    
-    
-
     
     
     /* ********************************************************************* */
