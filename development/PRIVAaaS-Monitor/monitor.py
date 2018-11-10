@@ -62,62 +62,25 @@ with open('schemas/atmosphere_tma-m_schema.json') as f:
 validator = Draft4Validator(tmaMSchema);
 
 
-
-
-
-@app.route('/monitor/auth')
-def process_message():
-    logger.info('1Processing Request %s', str(request))
-    #logger.info('Processing Request %s', input)
-
-
-
-
-
-
-
-#@app.route('/monitor/auth')
-#def process_auth():
-
-#    logger.info('2Processing Request %s', str(request))
-
-    ## Reject GET:
-    #if request.method == 'GET':
-    #    return "Method GET is not supported!"
-
-    ## Load json file:
-    #input = request.get_json(force=True);
-
-    #logger.info('Processing Request %s', input)
-
-
-#@app.route('/auth', methods=['GET', 'POST'])
-#def process_auth5():
-
-#    logger.info('5Processing Request %s', str(request))
-
-
 ##
 ## BRIEF: Receive messages: 
 ## ----------------------------------------------------------------------------
 ##
-#@app.route('/monitor', methods=['GET', 'POST'])
-#def process_message():
-#    logger.info('3Processing Request %s', str(request))
+@app.route('/monitor', methods=['GET', 'POST'])
+def process_message():
+    logger.info('3Processing Request %s', str(request))
 
     ## Reject GET:
-    #if request.method == 'GET':
-    #    return "Method GET is not supported!"
+    if request.method == 'GET':
+        return "Method GET is not supported!"
 
     ## Load json file:
-    #input = request.get_json(force=True);
+    input = request.get_json(force=True);
 
-    #print "Processing Request " + str(input);
+    print "Processing Request " + str(input);
 
-    #return validate_schema(input);
+    return validate_schema(input);
 ## END.
-
-
 
 
 ##

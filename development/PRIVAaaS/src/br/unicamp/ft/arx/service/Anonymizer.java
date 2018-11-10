@@ -48,8 +48,11 @@ public class Anonymizer extends Probe {
      ** DEFINE                                                               **
      **************************************************************************
     */    
-    public static final String ENDPOINT    = "127.0.0.1";
-    public static final int    RESOURCE_ID = 10203040;
+    public static final String  ENDPOINT       ="http://127.0.0.1:5005/monitor";
+    public static final int     RESOURCE_ID    =10203040;
+    public static final int     PROBE_ID       =22222222;
+    public static final boolean PUBLISH_MONITOR=true;
+    public static final char    CSV_SEPARATOR  =';';
     
     /*
      **************************************************************************
@@ -61,13 +64,17 @@ public class Anonymizer extends Probe {
     private JsonArray        __policyJsonArray;
     private int              __k;
     
-    public boolean            screen = false;
-    public  Data              dataAll;
-    public  ARXResult         result;
-    public  ARXNode           node;
-    public  int               k;
+    public boolean           screen = false;
+    public Data              dataAll;
+    public ARXResult         result;
+    public ARXNode           node;
+    public int               k;
     
-    
+    private char             __csvSeparator;
+    private String           __endpoint;
+    private int              __resourceId;
+    private int              __probeId;
+    private boolean          __publishMonitor;
     
     /*
      **************************************************************************
@@ -99,6 +106,7 @@ public class Anonymizer extends Probe {
             Anonymizer obj = new Anonymizer();
             
             obj.screen = true;
+            obj.load_config();
             obj.prepare_source(datadbFile, policyFile);
             obj.run();
             obj.get_json_anonymized();
@@ -117,6 +125,19 @@ public class Anonymizer extends Probe {
     /* ********************************************************************* */
     /* PUBLIC METHODS                                                        */
     /* ********************************************************************* */
+    /*
+     BRIEF: load some configs.
+     --------------------------------------------------------------------------
+    */
+    public void load_config() {
+        this.__csvSeparator   = CSV_SEPARATOR;    
+        this.__endpoint       = ENDPOINT;
+        this.__resourceId     = RESOURCE_ID;
+        this.__probeId        = PROBE_ID;
+        this.__publishMonitor = PUBLISH_MONITOR;
+    }
+    
+    
     /*
      BRIEF: prepare data to anonymization (to CSV inputstream).
      --------------------------------------------------------------------------
@@ -155,7 +176,7 @@ public class Anonymizer extends Probe {
            Source object represents. From dataset create a CVS file. */
         DataSource source = DataSource.createCSVSource(datasetFile, 
                                                        Charset.forName("UTF-8"),
-                                                       ';',
+                                                       this.__csvSeparator,
                                                        true);
 
         /* Execute the parse in json file, and extract the appropriate fields.*/
@@ -232,9 +253,8 @@ public class Anonymizer extends Probe {
         /* Mensure exec time: End. */
         this.__stopTime = System.currentTimeMillis();
     }
-    
-    
-    
+
+
     
     
     /*
@@ -360,19 +380,25 @@ public class Anonymizer extends Probe {
         System.out.println("*** Total Execution Time: "
                                  + (this.__stopTime - this.__startTime)+"[ms]");
                
-        /* Publish to monitor: k, risk and loss. */
-        int valret = this.publish_message(ENDPOINT,
-                                          System.currentTimeMillis(),
-                                          RESOURCE_ID,
-                                          this.__k,
-                                          riskP, 
-                                          riskJ,
-                                          riskM,
-                                          v0,
-                                          v1);
+        if (this.__publishMonitor == true) {
+            /* Publish to monitor: k, risk and loss. */
+            int valret = this.publish_message(this.__endpoint,
+                                              System.currentTimeMillis(),
+                                              this.__resourceId,
+                                              this.__probeId,
+                                              this.__k,
+                                              riskP, 
+                                              riskJ,
+                                              riskM,
+                                              v0,
+                                              v1);
         
-        if (valret == 1) {
-            System.out.println("Was not possible publish info to monitor!");
+            if (valret == 0) {
+                System.out.println("Was not possible publish info to monitor!");
+            }
+            else {
+                System.out.println("Info published to monitor!");            
+            }
         }
     }
     
@@ -546,7 +572,8 @@ public class Anonymizer extends Probe {
                                                                    IOException {
         
         this.dataAll.getDefinition().setAttributeType(field, 
-                       Hierarchy.create(filePath, StandardCharsets.UTF_8, ';'));
+                       Hierarchy.create(filePath, StandardCharsets.UTF_8,
+                       this.__csvSeparator));
     }
 
 
