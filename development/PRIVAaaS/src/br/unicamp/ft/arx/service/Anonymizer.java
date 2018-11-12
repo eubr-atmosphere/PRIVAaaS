@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 
 import java.sql.*;
 
@@ -15,6 +16,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 import java.util.Arrays;
+import java.util.Properties;
 
 import org.deidentifier.arx.*;
 import org.deidentifier.arx.aggregates.HierarchyBuilderRedactionBased;
@@ -48,7 +50,7 @@ public class Anonymizer extends Probe {
      ** DEFINE                                                               **
      **************************************************************************
     */    
-    public static final String  ENDPOINT       ="http://127.0.0.1:5005/monitor";
+    public static final String  ENDPOINT       ="http://localhost:5005/monitor";
     public static final int     RESOURCE_ID    =10203040;
     public static final int     PROBE_ID       =22222222;
     public static final boolean PUBLISH_MONITOR=true;
@@ -86,9 +88,10 @@ public class Anonymizer extends Probe {
         String saveInFile = "";
         String datadbFile = "";
         String policyFile = "";
+        String configFile = "";
         
         /* Excute the arguments parse (six arguments -name value). */        
-        if (args.length == 6) {
+        if (args.length >= 6) {
             
             for (int i = 0; i < args.length; i++) {        
                 
@@ -101,12 +104,15 @@ public class Anonymizer extends Probe {
                 if (args[i].equals("-d")) {
                     datadbFile = args[i+1];
                 }
+                if (args[i].equals("-c")) {
+                    configFile = args[i+1];
+                }
             }
             
             Anonymizer obj = new Anonymizer();
             
             obj.screen = true;
-            obj.load_config();
+            obj.load_config(configFile);
             obj.prepare_source(datadbFile, policyFile);
             obj.run();
             obj.get_json_anonymized();
@@ -129,12 +135,29 @@ public class Anonymizer extends Probe {
      BRIEF: load some configs.
      --------------------------------------------------------------------------
     */
-    public void load_config() {
-        this.__csvSeparator   = CSV_SEPARATOR;    
-        this.__endpoint       = ENDPOINT;
-        this.__resourceId     = RESOURCE_ID;
-        this.__probeId        = PROBE_ID;
-        this.__publishMonitor = PUBLISH_MONITOR;
+    public void load_config(String configFile) throws FileNotFoundException, 
+                                                      IOException {
+        
+        if ( configFile.length() != 0 ) {
+            Properties properties = new Properties();
+            
+            try (FileInputStream in = new FileInputStream(configFile)) {
+                properties.load(in);
+            }
+
+            this.__csvSeparator  =properties.getProperty("CSV_SEPARATOR").charAt(0);    
+            this.__endpoint      =properties.getProperty("ENDPOINT");
+            this.__resourceId    =Integer.parseInt(properties.getProperty("RESOURCE_ID"));
+            this.__probeId       =Integer.parseInt(properties.getProperty("PROBE_ID"));
+            this.__publishMonitor=Boolean.parseBoolean(properties.getProperty("PUBLISH_MONITOR"));
+        }
+        else {
+            this.__csvSeparator   = CSV_SEPARATOR;    
+            this.__endpoint       = ENDPOINT;
+            this.__resourceId     = RESOURCE_ID;
+            this.__probeId        = PROBE_ID;
+            this.__publishMonitor = PUBLISH_MONITOR;
+        }
     }
     
     
@@ -645,11 +668,12 @@ public class Anonymizer extends Probe {
 
         System.out.println("USAGE:");
         System.out.println("-------------------------------------------------");
-        System.out.println("anonymization -k <val> -p <val> -d <val> -o <val>");
+        System.out.println("anonymization -k <val> -p <val> -d <val> -o <val> [-c <file>]");
         System.out.println("* -k: k-anonymization paramenter (int).");
         System.out.println("* -p: policies filepath (string).");
         System.out.println("* -d: input    filepath (string).");
         System.out.println("* -o: output   filepath (string).");
+        System.out.println("* -c: config   filepath (string).");
     }
     
     
