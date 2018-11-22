@@ -31,8 +31,7 @@ from json         import loads;
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
 KAFKA_ADDRESS           = "10.0.0.68:9093";
-KAFKA_TOPIC_RECV        = "topic-privaaas-planning";
-KAFKA_TOPIC_SEND        = "topic-privaaas-execute";
+KAFKA_TOPIC_SEND        = "topic-privaaas-planning";
 KAFKA_GROUPID           = "privaaas";
 
 
@@ -71,56 +70,28 @@ class Queue_Listen:
     def __init__(self):
         print "---------------------------------------------------------------"
         print "INIT THE QUEUE CONSUMER                                        "
-        print "TMA Planning Stub                                              "
+        print "TMA Analyze Stub                                               "
         print "---------------------------------------------------------------"
-
-        self.consumer = self.__kafka_consumer();
-        if not self.consumer:
-            sys.exit(-1);
 
 
     ###########################################################################
     ## PUBLIC METHODS                                                        ##
-     ###########################################################################
+    ###########################################################################
     ##
     ## BRIEF: consume the queue.
     ## ------------------------------------------------------------------------
     ##
     def run(self):
-        while self.execute:
-           message = self.consumer.poll();
+        message = {"event":"teste"};
 
-           ##
-           msgContent = message.value();
+        jsonMessage = json.dumps(message);
 
-           if msgContent != '' and msgContent != "Broker: No more messages":
-               self.__send_message(msgContent);
-
-        self.__consumer.close();
+        self.__send_message(jsonMessage);
 
 
     ###########################################################################
     ## PRIVATE METHODS                                                       ##
     ###########################################################################
-    ##
-    ## BRIEF: consumer messages from kafka queue.
-    ## ------------------------------------------------------------------------
-    ##
-    def __kafka_consumer(self):
-
-        self.consumer = Consumer(
-            {
-                 "api.version.request" : True,
-                 "enable.auto.commit"  : True,
-                 "group.id"            : KAFKA_GROUPID,
-                 "bootstrap.servers"   : KAFKA_ADDRESS,
-                 "default.topic.config": {"auto.offset.reset": "earliest"}
-             }
-        );
-        self.consumer.subscribe([KAFKA_TOPIC_RECV]);
-        return self.consumer;
-
-
     ##
     ## BRIEF: send message to actuator.
     ## ------------------------------------------------------------------------
@@ -134,10 +105,10 @@ class Queue_Listen:
         producer.poll(0)
 
         ## Asynchronously produce a message, the delivery report callback  will
-        ## be triggered from poll() above, or flush() below, when the message
+        ## be triggered from poll() above, or flush() below, when the message 
         ## has been successfully delivered or failed permanently.
         producer.produce(KAFKA_TOPIC_SEND, 
-                         message, 
+                          message, 
                          callback=self.__delivery_report);
 
         # Wait for any outstanding messages to be delivered and delivery report
@@ -176,9 +147,7 @@ if __name__ == '__main__':
         queue.run();
 
     except KeyboardInterrupt:
-        queue.execute=False;
-        queue.consumer.unsubscribe([KAFKA_TOPIC_RECV]);
-        queue.consumer.close()
+        pass;
 
     sys.exit(0);
 ## EOF.

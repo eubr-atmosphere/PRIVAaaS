@@ -14,8 +14,7 @@ import os;
 import sys;
 import json;
 
-from kafka        import KafkaConsumer
-from kafka.errors import KafkaError;
+from confluent_kafka import Consumer, Producer
 from jsonschema   import Draft4Validator;
 from json         import loads;
 
@@ -31,12 +30,9 @@ from json         import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_VALUE_DESERIALIZER= lambda x: loads(x.decode('utf-8'));
-KAFKA_ADDR              = "localhost";
-KAFKA_PORT              = "9999";
-KAFKA_TOPIC             = "PRIVAaaS_Execute"
-KAFKA_GROUPID           = "Execute"
-
+KAFKA_ADDRESS           = "10.0.0.68:9093";
+KAFKA_TOPIC_RECV        = "topic-privaaas-execute";
+KAFKA_GROUPID           = "privaaas";
 
 
 
@@ -59,7 +55,9 @@ class Queue_Listen:
     ###########################################################################
     ## ATTIBUTES                                                             ##
     ###########################################################################
-    __consumer = None;
+    consumer = None;
+    producer = None;
+    execute  = True;
 
 
     ###########################################################################
@@ -70,28 +68,34 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ##
     def __init__(self):
-
         print "---------------------------------------------------------------"
         print "INIT THE QUEUE CONSUMER                                        "
-        print "TMA Execute Dummy                                              "
+        print "TMA Execute Stub                                               "
         print "---------------------------------------------------------------"
 
-        self.__consumer = self.__kafka_consumer();
-        if not self.__consumer:
+        self.consumer = self.__kafka_consumer();
+        if not self.consumer:
             sys.exit(-1);
 
 
     ###########################################################################
     ## PUBLIC METHODS                                                        ##
-    ###########################################################################
+     ###########################################################################
     ##
     ## BRIEF: consume the queue.
     ## ------------------------------------------------------------------------
     ##
-    def __run(self):
-        for message in self.__consumer:
-            ## Send request to PRIVaaS actuator.
-            self.__send_msg_to_actuator(message);
+    def run(self):
+        while self.execute:
+           message = self.consumer.poll();
+
+           ##
+           msgContent = message.value();
+
+           if msgContent != '' and msgContent != "Broker: No more messages":
+               self.__send_message(msgContent);
+
+        self.__consumer.close();
 
 
     ###########################################################################
@@ -103,19 +107,17 @@ class Queue_Listen:
     ##
     def __kafka_consumer(self):
 
-        try:
-            ## Instence the consumer object:
-            return KafkaConsumer(KAFKA_TOPIC,
-                              bootstrap_servers=[KAFKA_ADDR +':'+ KAFKA_PORT],
-                              auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
-                              enable_auto_commit=KAFKA_AUTO_COMMIT,
-                              consumer_timeout_ms=1000,
-                              group_id=KAFKA_GROUPID,
-                              value_deserializer=KAFKA_VALUE_DESERIALIZER);
-
-        except KafkaError as error:
-            print str(error) + ": Kafka is running??";
-            return None;
+        self.consumer = Consumer(
+            {
+                 "api.version.request" : True,
+                 "enable.auto.commit"  : True,
+                 "group.id"            : KAFKA_GROUPID,
+                 "bootstrap.servers"   : KAFKA_ADDRESS,
+                 "default.topic.config": {"auto.offset.reset": "earliest"}
+             }
+        );
+        self.consumer.subscribe([KAFKA_TOPIC_RECV]);
+        return self.consumer;
 
 
     ##
@@ -123,9 +125,8 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ## @PARAM message == message to send.
     ##
-    def __send_msg_to_actuator(self, message):
-        print "prepare";
-
+    def __send_message(self, message):
+        print message
 ## End Class.
 
 
@@ -139,7 +140,15 @@ class Queue_Listen:
 ## MAIN                                                                      ##
 ###############################################################################
 if __name__ == '__main__':
-    queue = Queue_Listen();
-    queue.run();
+    try:
+        queue = Queue_Listen();
+        queue.run();
 
+    except KeyboardInterrupt:
+        queue.execute=False;
+        queue.consumer.unsubscribe([KAFKA_TOPIC_RECV]);
+        queue.consumer.close()
+
+    sys.exit(0);
 ## EOF.
+
