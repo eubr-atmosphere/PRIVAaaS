@@ -6,7 +6,7 @@ import eu.atmosphere.tmaf.monitor.message.Data;
 import eu.atmosphere.tmaf.monitor.message.Message;
 import eu.atmosphere.tmaf.monitor.message.Observation;
 
-
+import javax.ws.rs.InternalServerErrorException;
 
 
 
@@ -25,8 +25,7 @@ public class Probe {
     /* ********************************************************************* */
     /* ATTRIBUTES                                                            */
     /* ********************************************************************* */
-    //BackgroundClient client;
-    SynchronousClient client;
+    
     
     /* ********************************************************************* */
     /* PUBLIC METHODS                                                        */
@@ -40,20 +39,25 @@ public class Probe {
                                long timeStamp,
                                int resourceId,
                                int probeId,
+                               int dId1,
+                               int dId2,
+                               int dId3,
+                               int dId4,
+                               int dId5,
+                               int dId6,
                                int k,
                                double riskP,
                                double riskJ, 
                                double riskM,
                                double lScore,
-                               double hScore) {
-    
+                               double hScore,
+                               int max_loop) {
         
-        this.client = new SynchronousClient(endpoint);
-        this.client.authenticate(probeId, "pass".getBytes());
+        SynchronousClient client = new SynchronousClient(endpoint);
+        client.authenticate(probeId, "pass".getBytes());
     
-           
         /* Create a new message to send to monitor: */
-        Message message = this.client.createMessage();
+        Message message = client.createMessage();
             
         message.setProbeId(probeId);
             
@@ -67,12 +71,12 @@ public class Probe {
         Observation observation5 = new Observation(timeStamp, lScore);
         Observation observation6 = new Observation(timeStamp, hScore);
             
-        Data data1 = new Data(Data.Type.MEASUREMENT, 10, observation1);
-        Data data2 = new Data(Data.Type.MEASUREMENT, 20, observation2);
-        Data data3 = new Data(Data.Type.MEASUREMENT, 21, observation3);
-        Data data4 = new Data(Data.Type.MEASUREMENT, 22, observation4);
-        Data data5 = new Data(Data.Type.MEASUREMENT, 30, observation5);
-        Data data6 = new Data(Data.Type.MEASUREMENT, 31, observation6);
+        Data data1 = new Data(Data.Type.MEASUREMENT, dId1, observation1);
+        Data data2 = new Data(Data.Type.MEASUREMENT, dId2, observation2);
+        Data data3 = new Data(Data.Type.MEASUREMENT, dId3, observation3);
+        Data data4 = new Data(Data.Type.MEASUREMENT, dId4, observation4);
+        Data data5 = new Data(Data.Type.MEASUREMENT, dId5, observation5);
+        Data data6 = new Data(Data.Type.MEASUREMENT, dId6, observation6);
 
         message.addData(data1);
         message.addData(data2);
@@ -80,10 +84,20 @@ public class Probe {
         message.addData(data4);
         message.addData(data5);
         message.addData(data6);
-            
-        int returnPublish = this.client.send(message);
-            
-        return returnPublish;
-    }
+        
+        int valRet = 0;
+        int count  = 0;
+        
+        while (valRet != 2 && count != max_loop) {                                
+            try {
+                valRet = client.send(message);
+            } catch (InternalServerErrorException e) {
+                System.out.println(e);
+                valRet = 0;
+            } 
+            count = count + 1;
+        }
+        return valRet;
+   }
 }
 /* EOF */

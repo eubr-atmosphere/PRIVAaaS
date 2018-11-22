@@ -51,10 +51,17 @@ public class Anonymizer extends Probe {
      **************************************************************************
     */    
     public static final String  ENDPOINT       ="http://localhost:5005/monitor";
-    public static final int     RESOURCE_ID    =10203040;
-    public static final int     PROBE_ID       =22222222;
+    public static final int     RESOURCE_ID    =8;
+    public static final int     PROBE_ID       =8;
     public static final boolean PUBLISH_MONITOR=true;
     public static final char    CSV_SEPARATOR  =';';
+    public static final int     D_ID_1         = 27;
+    public static final int     D_ID_2         = 28;
+    public static final int     D_ID_3         = 29;
+    public static final int     D_ID_4         = 30;
+    public static final int     D_ID_5         = 31;
+    public static final int     D_ID_6         = 32;
+    public static final int     MAX_LOOP       = 5;
     
     /*
      **************************************************************************
@@ -76,6 +83,14 @@ public class Anonymizer extends Probe {
     private String           __endpoint;
     private int              __resourceId;
     private int              __probeId;
+    private int              __maxLoop;
+    private int              __dId1;
+    private int              __dId2;
+    private int              __dId3;
+    private int              __dId4;
+    private int              __dId5;
+    private int              __dId6;
+    
     private boolean          __publishMonitor;
     
     /*
@@ -149,14 +164,29 @@ public class Anonymizer extends Probe {
             this.__endpoint      =properties.getProperty("ENDPOINT");
             this.__resourceId    =Integer.parseInt(properties.getProperty("RESOURCE_ID"));
             this.__probeId       =Integer.parseInt(properties.getProperty("PROBE_ID"));
+            this.__maxLoop       =Integer.parseInt(properties.getProperty("MAX_LOOP"));
             this.__publishMonitor=Boolean.parseBoolean(properties.getProperty("PUBLISH_MONITOR"));
+            
+            this.__dId1 = Integer.parseInt(properties.getProperty("D_ID_1"));
+            this.__dId2 = Integer.parseInt(properties.getProperty("D_ID_2"));
+            this.__dId3 = Integer.parseInt(properties.getProperty("D_ID_3"));
+            this.__dId4 = Integer.parseInt(properties.getProperty("D_ID_4"));
+            this.__dId5 = Integer.parseInt(properties.getProperty("D_ID_5"));
+            this.__dId6 = Integer.parseInt(properties.getProperty("D_ID_6"));
         }
         else {
             this.__csvSeparator   = CSV_SEPARATOR;    
             this.__endpoint       = ENDPOINT;
             this.__resourceId     = RESOURCE_ID;
             this.__probeId        = PROBE_ID;
+            this.__maxLoop        = MAX_LOOP;
             this.__publishMonitor = PUBLISH_MONITOR;
+            this.__dId1           = D_ID_1;
+            this.__dId2           = D_ID_2;
+            this.__dId3           = D_ID_3;
+            this.__dId4           = D_ID_4;
+            this.__dId5           = D_ID_5;
+            this.__dId6           = D_ID_6;
         }
     }
     
@@ -404,17 +434,26 @@ public class Anonymizer extends Probe {
                                  + (this.__stopTime - this.__startTime)+"[ms]");
                
         if (this.__publishMonitor == true) {
+            
+            
             /* Publish to monitor: k, risk and loss. */
             int valret = this.publish_message(this.__endpoint,
                                               System.currentTimeMillis(),
                                               this.__resourceId,
                                               this.__probeId,
+                                              this.__dId1,
+                                              this.__dId2,
+                                              this.__dId3,
+                                              this.__dId4,
+                                              this.__dId5,
+                                              this.__dId6,
                                               this.__k,
                                               riskP, 
                                               riskJ,
                                               riskM,
                                               v0,
-                                              v1);
+                                              v1,
+                                              this.__maxLoop);
         
             if (valret == 0) {
                 System.out.println("Was not possible publish info to monitor!");
