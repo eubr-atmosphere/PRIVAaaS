@@ -12,18 +12,21 @@
 ###############################################################################
 import os;
 import json;
+import sys;
+import Crypto;
+import ast;
+import logging.config;
+import logging;
+import requests;
 
-from jsonschema import Draft4Validator;
-from flask import Flask;
-from flask import request;
-
-import logging
-import logging.config
-
+from jsonschema       import Draft4Validator;
+from flask            import Flask;
+from flask            import request;
+from Crypto.PublicKey import RSA;
+from Crypto.Cipher    import PKCS1_OAEP;
 
 
-logger = logging.getLogger(__name__)
-logger.info('Starting Monitor Server Python')
+
 
 
 
@@ -36,9 +39,9 @@ logger.info('Starting Monitor Server Python')
 DEBUG="False"
 
 BIND="0.0.0.0"
-PORT=9002
+PORT=9001
 
-
+PROBE_URL="http://192.168.0.12:9002"
 
 
 
@@ -57,50 +60,68 @@ print "-----------------------------------------------------------------------"
 
 
 ##
+## BRIEF: Send Json message to Probe: 
+## ----------------------------------------------------------------------------
+## @PARAM message == message to send.
+##
+def send_message_to_update_k(message):
+
+    key   =  message.keys()[0];
+    value =  message[key];
+
+    ## Send Message
+    valRet = requests.post(PROBE_URL + "/update", json={key: value})
+    
+    print "Sending data to probe, return code: " + str(valRet.status_code);
+    return 0;
+## End.
+
+
+
+
+
+
+
+
+##
 ## BRIEF: Receive messages: 
 ## ----------------------------------------------------------------------------
 ##
-@app.route('/', methods=['GET', 'POST'])
-def process_message_root():
-    logger.info('Processing Request %s', str(request))
-
-    ## Reject GET:
-    if request.method == 'GET':
-        return "Method GET is not supported!"
-
-    ## Load json file:
-    input = request.get_json(force=True);
-
-    print "Processing Request " + str(input);
-
-    return validate_schema(input);
-## END.
-
-
-
-
-
-##
-## BRIEF: Update the k: 
-## ----------------------------------------------------------------------------
-##
-@app.route('/update', methods=['POST'])
-def process_message_update():
+@app.route('/', methods=['POST'])
+def process_message():
     print 'Processing Request ' + str(request);
 
     if request.method == 'POST':
 
-        ## Load json file:
-        try: 
-            print request.get_json(force=True);
+        try:
+            cipherMessage = request.data;
         except:
-            return "Error";
+            return "Error!";
 
+        ## Get the private key value:
+        key = RSA.importKey(open('/root/privaaas').read());
+
+        ## Create a new objetc that handle de criptographic key:
+        cipher = PKCS1_OAEP.new(key);
+
+        ## Descript the message received:
+        jsonMessage = cipher.decrypt(cipherMessage);
+
+        message = json.loads(jsonMessage);
+
+        ## HANDLE ACTIONS:
+        if message['action'].strip() == "update k":
+            send_message_to_update_k(message['configuration']);
+        else:
+            print "Action is not recoginized!!!!";
+         
     else:
         return "Method GET is not supported!"
 
-    return "Ok";
+    return "ok";
 ## END.
+
+
 
 
 

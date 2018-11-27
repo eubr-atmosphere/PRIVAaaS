@@ -13,10 +13,18 @@
 import os;
 import sys;
 import json;
+import Crypto;
+import ast;
+import subprocess;
+import time;
+import requests;
 
-from confluent_kafka import Consumer, Producer
-from jsonschema   import Draft4Validator;
-from json         import loads;
+from Crypto.PublicKey import RSA;
+from Crypto.Cipher    import PKCS1_OAEP;
+from Crypto           import Random;
+from confluent_kafka  import Consumer, Producer
+from jsonschema       import Draft4Validator;
+from json             import loads;
 
 
 
@@ -58,6 +66,7 @@ class Queue_Listen:
     consumer = None;
     producer = None;
     execute  = True;
+    __count  = 0;
 
 
     ###########################################################################
@@ -88,13 +97,12 @@ class Queue_Listen:
     def run(self):
         while self.execute:
            message = self.consumer.poll();
-
-           ##
+         
+           ## Get message data:
            msgContent = message.value();
 
            if msgContent != '' and msgContent != "Broker: No more messages":
                self.__send_message(msgContent);
-
         self.__consumer.close();
 
 
@@ -125,8 +133,75 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ## @PARAM message == message to send.
     ##
-    def __send_message(self, message):
-        print message
+    def __send_message(self, jsonMessage=''):
+       try:   
+           message = json.loads(jsonMessage);
+       except:
+           return -1;
+
+       ## Extract apropriate fields:
+       actuatorID = message["actuatorId"];
+       actionID   = message["actionId"  ];
+       resourceID = message["resourceId"];
+       value      = message["value"     ];
+
+       query  = "select actionName from Action where actionId="
+       query += actionID;
+       
+       ## TODO: remove and use kubernetes api python!
+       bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
+
+       ## Get action description:
+       actionDescription = subprocess.check_output(bashCommand, shell=True);
+
+       ## Create message to send:
+       query  = "select address,pubKey from Actuator where actuatorId=";
+       query += actuatorID;
+
+       ## TODO: remove and use kubernetes api python!
+       bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
+
+       valuesRet = subprocess.check_output(bashCommand, shell=True);
+       valuesRet = valuesRet.split();
+        
+       ## Get actuator addres and rsa public key to encrypt de message. Follow
+       ## the protocol.
+       address = valuesRet[0];
+       rsaKey  = valuesRet[1] + ' ' + valuesRet[2] + ' ' + valuesRet[3];
+
+       message = {}
+       message['resourceId'   ] = resourceID;
+       message['messageId'    ] = self.__count;
+       message['timestamp'    ] = time.time(); 
+       message['action'       ] = actionDescription;
+       message['configuration'] = {};
+       
+       message['configuration']['k'] = value;
+
+       self.__count += 1;
+ 
+       jsonMessage = json.dumps(message);
+
+       key        = RSA.importKey(rsaKey)
+       cipher     = PKCS1_OAEP.new(key)
+       cipherText = cipher.encrypt(jsonMessage)
+
+       ## Send to destiny:
+       self.__sendToDestiny(cipherText,address);
+
+       return 0;
+
+
+    ##
+    ## BRIEF:.
+    ## ------------------------------------------------------------------------
+    ##
+    ##
+    ##
+    def __sendToDestiny(self, cipherMessage, address):
+       valRet = requests.post(address, data=cipherMessage);
+       print valRet;
+
 ## End Class.
 
 

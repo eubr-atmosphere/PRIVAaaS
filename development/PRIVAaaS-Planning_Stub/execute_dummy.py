@@ -127,6 +127,14 @@ class Queue_Listen:
     ## @PARAM message == message to send.
     ##
     def __send_message(self, message):
+
+        message = {"actuatorId" : "8",
+                   "actionId"   : "1",
+                   "resourceId" : "8",
+                   "value"      : "2"}
+
+        jsonMessage = json.dumps(message);
+
         producer = Producer({'bootstrap.servers': KAFKA_ADDRESS})
 
         ## Trigger any available delivery report callbacks from previous produ-
@@ -137,7 +145,7 @@ class Queue_Listen:
         ## be triggered from poll() above, or flush() below, when the message
         ## has been successfully delivered or failed permanently.
         producer.produce(KAFKA_TOPIC_SEND, 
-                         message, 
+                         jsonMessage, 
                          callback=self.__delivery_report);
 
         # Wait for any outstanding messages to be delivered and delivery report
