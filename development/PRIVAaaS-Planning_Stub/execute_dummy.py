@@ -90,11 +90,12 @@ class Queue_Listen:
         while self.execute:
            message = self.consumer.poll();
 
-           ##
+           ## Get the message value:
            msgContent = message.value();
 
            if msgContent != '' and msgContent != "Broker: No more messages":
-               self.__send_message(msgContent);
+               ## Getting the planning:
+               msgPlanning = self.__get_planning(msgContent);
 
         self.__consumer.close();
 
@@ -102,6 +103,25 @@ class Queue_Listen:
     ###########################################################################
     ## PRIVATE METHODS                                                       ##
     ###########################################################################
+    ##
+    ## BRIEF: getting the planning.
+    ## ------------------------------------------------------------------------
+    ## @PARAM message == message to getting planning.
+    ## 
+    def __get_planning(self, jsonMessage):
+        messageReceived = json.loads(jsonMessage);
+
+        newK = str(int(messageReceived["configuration"]["k"]) + 1);
+
+        message = {"actuatorId" : "8",
+                   "actionId"   : "1",
+                   "resourceId" : "8",
+                   "configuration" : {"k": newK}};
+
+        self.__send_message(message);
+        return 0;
+
+
     ##
     ## BRIEF: consumer messages from kafka queue.
     ## ------------------------------------------------------------------------
@@ -127,11 +147,6 @@ class Queue_Listen:
     ## @PARAM message == message to send.
     ##
     def __send_message(self, message):
-
-        message = {"actuatorId" : "8",
-                   "actionId"   : "1",
-                   "resourceId" : "8",
-                   "value"      : "2"}
 
         jsonMessage = json.dumps(message);
 

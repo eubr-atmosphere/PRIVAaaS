@@ -18,6 +18,7 @@ import ast;
 import logging.config;
 import logging;
 import requests;
+import socket;
 
 from jsonschema       import Draft4Validator;
 from flask            import Flask;
@@ -43,6 +44,8 @@ PORT=9001
 
 PROBE_URL="http://192.168.0.12:9002"
 
+PROBE_HOST = '127.0.0.1'     # Endereco IP do Servidor.
+PROBE_PORT = 6000            # Porta que o Servidor.
 
 
 
@@ -66,13 +69,14 @@ print "-----------------------------------------------------------------------"
 ##
 def send_message_to_update_k(message):
 
-    key   =  message.keys()[0];
-    value =  message[key];
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    dest = (PROBE_HOST, PROBE_PORT);
 
-    ## Send Message
-    valRet = requests.post(PROBE_URL + "/update", json={key: value})
-    
-    print "Sending data to probe, return code: " + str(valRet.status_code);
+    tcp.connect(PROBE_HOST, PROBE_PORT);
+ 
+    tcp.send (message);
+    tcp.close();
+
     return 0;
 ## End.
 
