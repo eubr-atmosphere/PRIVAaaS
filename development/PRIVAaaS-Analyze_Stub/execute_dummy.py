@@ -13,6 +13,8 @@
 import os;
 import sys;
 import json;
+import subprocess;
+import time;
 
 from confluent_kafka import Consumer, Producer
 from jsonschema   import Draft4Validator;
@@ -55,9 +57,10 @@ class Queue_Listen:
     ###########################################################################
     ## ATTIBUTES                                                             ##
     ###########################################################################
-    consumer = None;
-    producer = None;
-    execute  = True;
+    consumer   = None;
+    producer   = None;
+    execute    = True;
+    __lastDate = '0001-01-01 00:00:00.000000';
 
 
     ###########################################################################
@@ -73,6 +76,8 @@ class Queue_Listen:
         print "TMA Analyze Stub                                               "
         print "---------------------------------------------------------------"
 
+        self.__lastDate = time.strptime(self.__lastDate,"%Y-%m-%d %H:%M:%S.%f");
+
 
     ###########################################################################
     ## PUBLIC METHODS                                                        ##
@@ -82,22 +87,81 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ##
     def run(self):
-        message = {"event":"teste"};
+        while True:
+            self.__watch_database();
+            time.sleep(5);
+
+
+    ###########################################################################
+    ## PRIVATE METHODS                                                       ##
+    ###########################################################################
+    def __watch_database(self):
+
+       v = [0, 0.0, 0.0, 0.0, 0.0, 0.0];
+       d = ['','', '', '', '', ''];
+
+       count  = 0;
+
+       for resourceId in range(27, 33):
+           query  = "SELECT * FROM Data WHERE descriptionId=" + str(resourceId);
+           query += " ORDER BY valueTime DESC LIMIT 1";
+
+           ## TODO: remove and use kubernetes api python!
+           bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
+
+           ## Get action description:
+           try:
+               valRet = subprocess.check_output(bashCommand, shell=True);
+               valRet = valRet.split();
+
+               v[count] = valRet[5];
+               d[count] = time.strptime(valRet[3]+' '+valRet[4], "%Y-%m-%d %H:%M:%S.%f");
+
+           except:
+               pass;
+
+           count += 1;
+
+       ## Check if exist dataloss:  
+       if d[0] == d[1] == d[2] == d[3] == d[4] == d[5]:
+
+           ## If the sample is new analyze the score:
+           if d[0] > self.__lastDate: 
+               self.__analyze_score(v);
+
+               ## Set new date:
+               self.__lastDate = d[0];
+           else:
+               print "New samples not found...";
+
+       else:
+           print "Data loss...";
+
+       return 0;
+
+
+    ##
+    ## BRIEF:
+    ## ------------------------------------------------------------------------
+    ##
+    def __analyze_score(self, values):
+     
+        k = values[0];
+
+        message = {"probeId": "8","configuration": {"k": values[0]}};
 
         jsonMessage = json.dumps(message);
 
         self.__send_message(jsonMessage);
 
 
-    ###########################################################################
-    ## PRIVATE METHODS                                                       ##
-    ###########################################################################
+
     ##
     ## BRIEF: send message to actuator.
     ## ------------------------------------------------------------------------
-    ## @PARAM message == message to send.
     ##
     def __send_message(self, message):
+
         producer = Producer({'bootstrap.servers': KAFKA_ADDRESS})
 
         ## Trigger any available delivery report callbacks from previous produ-

@@ -1,6 +1,6 @@
 USAGE:
 =========
-java -jar dist/PRIVAaaSAllInOneJar.jar -d test_files/weekly-usage.csv -p test_files/param.csv -o test_01.csv
+java -jar dist/PRIVAaaSAllInOneJar.jar -d test_files/weekly-usage.csv -p test_files/param.csv -o test_01.csv <-c config file>
 
 where -d refers to the input file, -p refers to the policy, -o refers to the output anonymized file that will be generated.
 

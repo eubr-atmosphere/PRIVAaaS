@@ -140,10 +140,10 @@ class Queue_Listen:
            return -1;
 
        ## Extract apropriate fields:
-       actuatorID = message["actuatorId"];
-       actionID   = message["actionId"  ];
-       resourceID = message["resourceId"];
-       value      = message["value"     ];
+       actuatorID = message["actuatorId"   ];
+       actionID   = message["actionId"     ];
+       resourceID = message["resourceId"   ];
+       value      = message["configuration"];
 
        query  = "select actionName from Action where actionId="
        query += actionID;
@@ -174,9 +174,7 @@ class Queue_Listen:
        message['messageId'    ] = self.__count;
        message['timestamp'    ] = time.time(); 
        message['action'       ] = actionDescription;
-       message['configuration'] = {};
-       
-       message['configuration']['k'] = value;
+       message['configuration'] = value;
 
        self.__count += 1;
  
@@ -193,10 +191,10 @@ class Queue_Listen:
 
 
     ##
-    ## BRIEF:.
+    ## BRIEF: post the messagem.
     ## ------------------------------------------------------------------------
-    ##
-    ##
+    ## @PARAM cipherMessage == message cryptographed;
+    ## @PARAM address       == actuator endpoint.
     ##
     def __sendToDestiny(self, cipherMessage, address):
        valRet = requests.post(address, data=cipherMessage);
