@@ -15,10 +15,13 @@ import sys;
 import json;
 import subprocess;
 import time;
+import mysql.connector;
 
 from confluent_kafka import Consumer, Producer
-from jsonschema   import Draft4Validator;
-from json         import loads;
+from jsonschema      import Draft4Validator;
+from json            import loads;
+from mysql.connector import errorcode;
+
 
 
 
@@ -32,9 +35,14 @@ from json         import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.68:9093";
+KAFKA_ADDRESS           = "10.0.0.74:9093";
 KAFKA_TOPIC_SEND        = "topic-privaaas-planning";
 KAFKA_GROUPID           = "privaaas";
+
+DB_USER = 'privaaas';
+DB_PASS = '123mudar';
+DB_HOST = '10.0.0.75'
+DB_NAME = 'knowledge';
 
 
 
@@ -61,6 +69,8 @@ class Queue_Listen:
     producer   = None;
     execute    = True;
     __lastDate = '0001-01-01 00:00:00.000000';
+    __cnx      = None;
+    __date     = '';
 
 
     ###########################################################################
@@ -87,9 +97,11 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ##
     def run(self):
+
         while True:
+            print "Waiting for new data!"
             self.__watch_database();
-            time.sleep(5);
+            time.sleep(10);
 
 
     ###########################################################################
@@ -97,45 +109,30 @@ class Queue_Listen:
     ###########################################################################
     def __watch_database(self):
 
-       v = [0, 0.0, 0.0, 0.0, 0.0, 0.0];
-       d = ['','', '', '', '', ''];
+       valuesList = {};
+       for resourceId in range(1,7):
 
-       count  = 0;
-
-       for resourceId in range(27, 33):
-           query  = "SELECT * FROM Data WHERE descriptionId=" + str(resourceId);
-           query += " ORDER BY valueTime DESC LIMIT 1";
-
-           ## TODO: remove and use kubernetes api python!
-           bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
-
-           ## Get action description:
-           try:
-               valRet = subprocess.check_output(bashCommand, shell=True);
-               valRet = valRet.split();
-
-               v[count] = valRet[5];
-               d[count] = time.strptime(valRet[3]+' '+valRet[4], "%Y-%m-%d %H:%M:%S.%f");
-
-           except:
-               pass;
-
-           count += 1;
-
-       ## Check if exist dataloss:  
-       if d[0] == d[1] == d[2] == d[3] == d[4] == d[5]:
-
-           ## If the sample is new analyze the score:
-           if d[0] > self.__lastDate: 
-               self.__analyze_score(v);
-
-               ## Set new date:
-               self.__lastDate = d[0];
+           if self.__date == '':
+               query  = "SELECT * FROM Data WHERE descriptionId=" + str(resourceId);
+               query += " ORDER BY valueTime DESC LIMIT 1";
            else:
-               print "New samples not found...";
+               query  = "SELECT * FROM Data WHERE descriptionId=" + str(resourceId);
+               query += " AND valueTime > " + "'" + str(self.__date) + "'";
+               query += " ORDER BY valueTime DESC LIMIT 1";
 
-       else:
-           print "Data loss...";
+           values = self.__select_database(query);
+
+           try:
+                valuesList[values[1]] = values[4];
+           except:
+                pass;
+
+       if values != '' and (values[3] != self.__date):
+           self.__date = values[3];
+       
+       if valuesList.has_key(1): 
+           print "New data found!"
+           self.__analyze_score(valuesList[1]);
 
        return 0;
 
@@ -144,13 +141,11 @@ class Queue_Listen:
     ## BRIEF:
     ## ------------------------------------------------------------------------
     ##
-    def __analyze_score(self, values):
-     
-        k = values[0];
-
-        message = {"probeId": "8","configuration": {"k": values[0]}};
+    def __analyze_score(self, k):
+        message = {"probeId": "8","configuration": {"k": k}};
 
         jsonMessage = json.dumps(message);
+        print jsonMessage
 
         self.__send_message(jsonMessage);
 
@@ -172,7 +167,7 @@ class Queue_Listen:
         ## be triggered from poll() above, or flush() below, when the message 
         ## has been successfully delivered or failed permanently.
         producer.produce(KAFKA_TOPIC_SEND, 
-                          message, 
+                         message, 
                          callback=self.__delivery_report);
 
         # Wait for any outstanding messages to be delivered and delivery report
@@ -193,6 +188,60 @@ class Queue_Listen:
         else:
             print('Message delivered to {} [{}]'.format(message.topic(), 
                    message.partition()));
+
+
+    ##
+    ## BRIEF: connect to mysql.
+    ## ------------------------------------------------------------------------
+    ##
+    def __connect_database(self):
+
+        try:
+            self.__cnx = mysql.connector.connect(user=DB_USER,
+                                                 password=DB_PASS,
+                                                 host=DB_HOST,
+                                                 database=DB_NAME);
+
+        except mysql.connector.Error as err:
+
+            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+               print("Something is wrong with your user name or password");
+            elif err.errno == errorcode.ER_BAD_DB_ERROR:
+               print("Database does not exist");
+            else:
+               print(err);
+
+            sys.exit(-1);
+
+
+    ##
+    ## BRIEF: select in databas.
+    ## ------------------------------------------------------------------------
+    ## @PARAM query == query to perform in database.
+    ##
+    def __select_database(self, query):
+        self.__connect_database();
+        ## Get cursor:
+        cursor = self.__cnx.cursor();
+
+        ## Execute the query:
+        cursor.execute(query);
+        
+        buffer = '';
+        for record in cursor:
+            buffer = record;
+
+        cursor.close();
+        self.__disconnect_database();
+        return buffer;
+
+
+    ## 
+    ## BRIEF: disconnect from database.
+    ## -----------------------------------------------------------------------
+    ##
+    def __disconnect_database(self):
+        self.__cnx.close();
 ## End Class.
 
 

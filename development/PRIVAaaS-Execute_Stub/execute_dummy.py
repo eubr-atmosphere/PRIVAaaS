@@ -18,7 +18,9 @@ import ast;
 import subprocess;
 import time;
 import requests;
+import mysql.connector;
 
+from mysql.connector  import errorcode;
 from Crypto.PublicKey import RSA;
 from Crypto.Cipher    import PKCS1_OAEP;
 from Crypto           import Random;
@@ -38,9 +40,15 @@ from json             import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.68:9093";
+KAFKA_ADDRESS           = "10.0.0.74:9093";
 KAFKA_TOPIC_RECV        = "topic-privaaas-execute";
 KAFKA_GROUPID           = "privaaas";
+
+DB_USER = 'privaaas';
+DB_PASS = '123mudar';
+DB_HOST = '10.0.0.75'
+DB_NAME = 'knowledge';
+
 
 
 
@@ -67,6 +75,7 @@ class Queue_Listen:
     producer = None;
     execute  = True;
     __count  = 0;
+    __cnx    = None;
 
 
     ###########################################################################
@@ -103,6 +112,7 @@ class Queue_Listen:
 
            if msgContent != '' and msgContent != "Broker: No more messages":
                self.__send_message(msgContent);
+
         self.__consumer.close();
 
 
@@ -145,29 +155,25 @@ class Queue_Listen:
        resourceID = message["resourceId"   ];
        value      = message["configuration"];
 
-       query  = "select actionName from Action where actionId="
+       query  = "SELECT actionName FROM Action where actionId="
        query += actionID;
        
-       ## TODO: remove and use kubernetes api python!
-       bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
+       ## Select:
+       valRet = self.__select_database(query);
 
-       ## Get action description:
-       actionDescription = subprocess.check_output(bashCommand, shell=True);
+       actionDescription = valRet[0];
 
        ## Create message to send:
        query  = "select address,pubKey from Actuator where actuatorId=";
        query += actuatorID;
 
-       ## TODO: remove and use kubernetes api python!
-       bashCommand = 'kubectl exec -ti mysql-0 -- bash -c "mysql -u root --password=\$MYSQL_ROOT_PASSWORD knowledge -s -N -e \\"' + query + '\\"" | tail -n 1'
+       ## Select:
+       valRet = self.__select_database(query);
 
-       valuesRet = subprocess.check_output(bashCommand, shell=True);
-       valuesRet = valuesRet.split();
-        
        ## Get actuator addres and rsa public key to encrypt de message. Follow
        ## the protocol.
-       address = valuesRet[0];
-       rsaKey  = valuesRet[1] + ' ' + valuesRet[2] + ' ' + valuesRet[3];
+       address = valRet[0];
+       rsaKey  = valRet[1];
 
        message = {}
        message['resourceId'   ] = resourceID;
@@ -184,6 +190,8 @@ class Queue_Listen:
        cipher     = PKCS1_OAEP.new(key)
        cipherText = cipher.encrypt(jsonMessage)
 
+       print message;
+
        ## Send to destiny:
        self.__sendToDestiny(cipherText,address);
 
@@ -199,6 +207,61 @@ class Queue_Listen:
     def __sendToDestiny(self, cipherMessage, address):
        valRet = requests.post(address, data=cipherMessage);
        print valRet;
+
+
+    ##
+    ## BRIEF: connect to mysql.
+    ## ------------------------------------------------------------------------
+    ##
+    def __connect_database(self):
+
+        try:
+            self.__cnx = mysql.connector.connect(user=DB_USER,
+                                                 password=DB_PASS,
+                                                 host=DB_HOST,
+                                                 database=DB_NAME);
+
+        except mysql.connector.Error as err:
+
+            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+               print("Something is wrong with your user name or password");
+            elif err.errno == errorcode.ER_BAD_DB_ERROR:
+               print("Database does not exist");
+            else:
+               print(err);
+
+            sys.exit(-1);
+
+
+    ##
+    ## BRIEF: select in databas.
+    ## ------------------------------------------------------------------------
+    ## @PARAM query == query to perform in database.
+    ##
+    def __select_database(self, query):
+        self.__connect_database();
+
+        ## Get cursor:
+        cursor = self.__cnx.cursor();
+
+        ## Execute the query:
+        cursor.execute(query);
+    
+        buffer = '';
+        for record in cursor:
+            buffer = record;
+
+        cursor.close();
+        self.__disconnect_database();
+        return buffer;
+
+
+    ##
+    ## BRIEF: disconnect from database.
+    ## -----------------------------------------------------------------------
+    ##
+    def __disconnect_database(self):
+        self.__cnx.close();
 
 ## End Class.
 
@@ -224,4 +287,3 @@ if __name__ == '__main__':
 
     sys.exit(0);
 ## EOF.
-

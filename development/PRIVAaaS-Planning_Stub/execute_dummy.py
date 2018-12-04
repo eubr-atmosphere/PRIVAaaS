@@ -30,7 +30,7 @@ from json         import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.68:9093";
+KAFKA_ADDRESS           = "10.0.0.74:9093";
 KAFKA_TOPIC_RECV        = "topic-privaaas-planning";
 KAFKA_TOPIC_SEND        = "topic-privaaas-execute";
 KAFKA_GROUPID           = "privaaas";
@@ -87,6 +87,7 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ##
     def run(self):
+    
         while self.execute:
            message = self.consumer.poll();
 
@@ -109,14 +110,20 @@ class Queue_Listen:
     ## @PARAM message == message to getting planning.
     ## 
     def __get_planning(self, jsonMessage):
+
+
+
         messageReceived = json.loads(jsonMessage);
 
         newK = str(int(messageReceived["configuration"]["k"]) + 1);
 
-        message = {"actuatorId" : "8",
+        message = {"actuatorId" : "1",
                    "actionId"   : "1",
-                   "resourceId" : "8",
+                   "resourceId" : "1",
                    "configuration" : {"k": newK}};
+
+        ##
+        print message
 
         self.__send_message(message);
         return 0;
@@ -134,7 +141,7 @@ class Queue_Listen:
                  "enable.auto.commit"  : True,
                  "group.id"            : KAFKA_GROUPID,
                  "bootstrap.servers"   : KAFKA_ADDRESS,
-                 "default.topic.config": {"auto.offset.reset": "earliest"}
+                 "default.topic.config": {"auto.offset.reset": "latest"}
              }
         );
         self.consumer.subscribe([KAFKA_TOPIC_RECV]);

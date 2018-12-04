@@ -68,13 +68,14 @@ print "-----------------------------------------------------------------------"
 ## @PARAM message == message to send.
 ##
 def send_message_to_update_k(message):
-
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     dest = (PROBE_HOST, PROBE_PORT);
 
-    tcp.connect(PROBE_HOST, PROBE_PORT);
+    tcp.connect(dest);
  
-    tcp.send (message);
+    print "Message received: " + str(message);
+
+    tcp.send (str(message['k']));
     tcp.close();
 
     return 0;
