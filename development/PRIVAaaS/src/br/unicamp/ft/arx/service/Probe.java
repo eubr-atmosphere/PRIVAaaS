@@ -5,6 +5,10 @@ import eu.atmosphere.tmaf.monitor.client.SynchronousClient;
 import eu.atmosphere.tmaf.monitor.message.Data;
 import eu.atmosphere.tmaf.monitor.message.Message;
 import eu.atmosphere.tmaf.monitor.message.Observation;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 import javax.ws.rs.InternalServerErrorException;
 
@@ -20,7 +24,8 @@ public class Probe {
     /* ********************************************************************* */
     /* DEFINES                                                               */
     /* ********************************************************************* */
-
+    public static final int SOCKET_PORT     = 6000;
+    public static final int SOCKET_TIME_OUT = 1200000;
 
     /* ********************************************************************* */
     /* ATTRIBUTES                                                            */
@@ -51,7 +56,7 @@ public class Probe {
                                double riskM,
                                double lScore,
                                double hScore,
-                               int max_loop) {
+                               int max_loop) throws IOException {
         
         SynchronousClient client = new SynchronousClient(endpoint);
         client.authenticate(probeId, "pass".getBytes());
@@ -84,9 +89,10 @@ public class Probe {
         message.addData(data4);
         message.addData(data5);
         message.addData(data6);
-        
-        int valRet = 0;
-        int count  = 0;
+
+        int result = -1;        
+        int valRet =  0;
+        int count  =  0;
         
         while (valRet != 2 && count != max_loop) {                                
             try {
@@ -94,10 +100,56 @@ public class Probe {
             } catch (InternalServerErrorException e) {
                 System.out.println(e);
                 valRet = 0;
-            } 
+            } catch (Exception e) {
+                System.out.println(e);
+                valRet = 0;
+            }
             count = count + 1;
         }
-        return valRet;
-   }
+        
+        /* Wait the result of actuator (update the k?) */
+        if (valRet != 0) {
+            result = this.__listen_socket();
+        }
+        
+        return result;
+    }
+    
+    /* ********************************************************************* */
+    /* PRIVATE METHODS                                                       */
+    /* ********************************************************************* */
+    /*
+    * BRIEF: listen return from actuator.
+    * --------------------------------------------------------------------------
+    */
+    private int __listen_socket() throws IOException {
+        
+        int k = -1;
+        
+        try (ServerSocket server = new ServerSocket(SOCKET_PORT)) {
+            try {
+                /* Non block: timeout after 120 seconds: */
+                server.setSoTimeout(SOCKET_TIME_OUT);
+                
+                Socket client = server.accept();
+                
+                DataInputStream input=new DataInputStream(client.getInputStream());
+                k = input.readInt();
+                
+                input.close();
+                client.close();
+            }
+            catch(IOException e) {
+                return -2;
+            }
+            finally {
+                server.close();
+            }
+        }
+        catch(Exception e) {
+            return -2;
+        }
+        return k;
+    }
 }
 /* EOF */

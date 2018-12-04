@@ -50,18 +50,6 @@ public class Anonymizer extends Probe {
      ** DEFINE                                                               **
      **************************************************************************
     */    
-    public static final String  ENDPOINT       ="http://localhost:5005/monitor";
-    public static final int     RESOURCE_ID    =8;
-    public static final int     PROBE_ID       =8;
-    public static final boolean PUBLISH_MONITOR=true;
-    public static final char    CSV_SEPARATOR  =';';
-    public static final int     D_ID_1         = 27;
-    public static final int     D_ID_2         = 28;
-    public static final int     D_ID_3         = 29;
-    public static final int     D_ID_4         = 30;
-    public static final int     D_ID_5         = 31;
-    public static final int     D_ID_6         = 32;
-    public static final int     MAX_LOOP       = 5;
     
     /*
      **************************************************************************
@@ -71,27 +59,32 @@ public class Anonymizer extends Probe {
     private long             __startTime;
     private long             __stopTime;
     private JsonArray        __policyJsonArray;
-    private int              __k;
     
     public boolean           screen = false;
     public Data              dataAll;
     public ARXResult         result;
     public ARXNode           node;
     public int               k;
+    public boolean           publishMonitor = true;
     
-    private char             __csvSeparator;
-    private String           __endpoint;
-    private int              __resourceId;
-    private int              __probeId;
-    private int              __maxLoop;
-    private int              __dId1;
-    private int              __dId2;
-    private int              __dId3;
-    private int              __dId4;
-    private int              __dId5;
-    private int              __dId6;
+    private char             __csvSeparator = ';';
+    private String           __endpoint     = "http://localhost:5005/monitor";
+    private int              __resourceId   = 8;
+    private int              __probeId      = 8;
+    private int              __maxLoop      = 5;
+    private int              __dId1         = 27;
+    private int              __dId2         = 28;
+    private int              __dId3         = 29;
+    private int              __dId4         = 30;
+    private int              __dId5         = 31;
+    private int              __dId6         = 32;
     
-    private boolean          __publishMonitor;
+    private double           __riskP;
+    private double           __riskJ;
+    private double           __riskM;
+    private double           __v0;
+    private double           __v1;
+
     
     /*
      **************************************************************************
@@ -130,6 +123,30 @@ public class Anonymizer extends Probe {
             obj.load_config(configFile);
             obj.prepare_source(datadbFile, policyFile);
             obj.run();
+            
+            int k = 0;
+            while (k != -1) {
+                /* Publish the results to monitor. */
+                k = obj.publish_message_monitor();
+                
+                if (k < 0) {
+                    System.out.println("Wasn't possible publish information!");
+                    break;
+                }
+                else {
+                    System.out.println("Info published to monitor! New K: "+k);
+                    
+                    /* If receive new k from actuator re-execute the anonymize*/
+                    if (obj.k != k) {
+                        obj.k = k;
+                        obj.run();
+                    }
+                    else {
+                        break;
+                    }
+                }
+            }
+            
             obj.get_json_anonymized();
             obj.show_results();
             obj.save_in_file(saveInFile);
@@ -160,12 +177,16 @@ public class Anonymizer extends Probe {
                 properties.load(in);
             }
 
-            this.__csvSeparator  =properties.getProperty("CSV_SEPARATOR").charAt(0);    
-            this.__endpoint      =properties.getProperty("ENDPOINT");
-            this.__resourceId    =Integer.parseInt(properties.getProperty("RESOURCE_ID"));
-            this.__probeId       =Integer.parseInt(properties.getProperty("PROBE_ID"));
-            this.__maxLoop       =Integer.parseInt(properties.getProperty("MAX_LOOP"));
-            this.__publishMonitor=Boolean.parseBoolean(properties.getProperty("PUBLISH_MONITOR"));
+            this.__csvSeparator=properties.getProperty("CSV_SEPARATOR").charAt(0);    
+            this.__endpoint    =properties.getProperty("ENDPOINT");
+            
+            this.__resourceId=Integer.parseInt(properties.getProperty("RESOURCE_ID"));
+            
+            this.__probeId=Integer.parseInt(properties.getProperty("PROBE_ID"));
+            this.__maxLoop=Integer.parseInt(properties.getProperty("MAX_LOOP"));
+            
+            this.publishMonitor  =
+                Boolean.parseBoolean(properties.getProperty("PUBLISH_MONITOR"));
             
             this.__dId1 = Integer.parseInt(properties.getProperty("D_ID_1"));
             this.__dId2 = Integer.parseInt(properties.getProperty("D_ID_2"));
@@ -173,20 +194,6 @@ public class Anonymizer extends Probe {
             this.__dId4 = Integer.parseInt(properties.getProperty("D_ID_4"));
             this.__dId5 = Integer.parseInt(properties.getProperty("D_ID_5"));
             this.__dId6 = Integer.parseInt(properties.getProperty("D_ID_6"));
-        }
-        else {
-            this.__csvSeparator   = CSV_SEPARATOR;    
-            this.__endpoint       = ENDPOINT;
-            this.__resourceId     = RESOURCE_ID;
-            this.__probeId        = PROBE_ID;
-            this.__maxLoop        = MAX_LOOP;
-            this.__publishMonitor = PUBLISH_MONITOR;
-            this.__dId1           = D_ID_1;
-            this.__dId2           = D_ID_2;
-            this.__dId3           = D_ID_3;
-            this.__dId4           = D_ID_4;
-            this.__dId5           = D_ID_5;
-            this.__dId6           = D_ID_6;
         }
     }
     
@@ -205,12 +212,12 @@ public class Anonymizer extends Probe {
         
         /* Get k value. */
         JsonNumber number = (JsonNumber)policyJsonObj.get("k");
-        this.__k = number.intValue();
+        this.k = number.intValue();
         
         /* Create data from inputStreamCSV: */      
-        this.dataAll = Data.create(streamCSV, Charset.forName("UTF-8"),';');
+        this.dataAll = Data.create(streamCSV, Charset.forName("UTF-8"),
+                                                           this.__csvSeparator);
     }
-    
     
     
     
@@ -276,7 +283,7 @@ public class Anonymizer extends Probe {
            of outliers and thus triggers tuple suppression. */
         ARXConfiguration cfg = ARXConfiguration.create();
 
-        cfg.addPrivacyModel(new KAnonymity(this.__k));
+        cfg.addPrivacyModel(new KAnonymity(this.k));
         cfg.setSuppressionLimit(0d);
 
         /* Mensure exec time: start. */
@@ -333,7 +340,6 @@ public class Anonymizer extends Probe {
                 objectBuilder.add(field, String.valueOf(colVal));
             }
             
-            /**/
             register.add(objectBuilder);
         }   
         return register.build();
@@ -354,27 +360,23 @@ public class Anonymizer extends Probe {
            tion value. */        
         ARXPopulationModel pModel = ARXPopulationModel.create(dRowNumber,0.01d);
 
-        double riskP = this.result.getOutput()
+        this.__riskP = this.result.getOutput()
                                   .getRiskEstimator(pModel)
                                   .getSampleBasedReidentificationRisk()
                                   .getEstimatedProsecutorRisk();
         
-        double riskJ = this.result.getOutput()
+        this.__riskJ = this.result.getOutput()
                                   .getRiskEstimator(pModel)
                                   .getSampleBasedReidentificationRisk()
                                   .getEstimatedJournalistRisk();
         
-        double riskM = this.result.getOutput()
+       this.__riskM = this.result.getOutput()
                                   .getRiskEstimator(pModel)
                                   .getSampleBasedReidentificationRisk()
                                   .getEstimatedMarketerRisk();
-        
-        /* v0 == lScore, v1 == hScore. */
-        //InformationLoss<?> v0 =this.node.getLowestScore().toString();
-        //InformationLoss<?> v1 =this.node.getHighestScore().toString();
-        
-        double v0 = Double.parseDouble(this.node.getLowestScore().toString() );
-        double v1 = Double.parseDouble(this.node.getHighestScore().toString());
+                
+        this.__v0 = Double.parseDouble(this.node.getLowestScore().toString() );
+        this.__v1 = Double.parseDouble(this.node.getHighestScore().toString());
         
         /* Statistic: */
         StatisticsEquivalenceClasses v2 = this.result
@@ -407,62 +409,34 @@ public class Anonymizer extends Probe {
         System.out.println("-- OUTPUT DATA                                   ");
         System.out.println("================================================ ");
         System.out.println("- Mixed Risk                                     ");
-        System.out.println("  * Prosecutor re-identification risk: "+ riskP   );
-        System.out.println("  * Journalist re-identification risk: "+ riskJ   );
-        System.out.println("  * Marketer   re-identification risk: "+ riskM   );
-        System.out.println("  * K anonimity .....................: "+ this.__k);
-        System.out.println("                                                 ");
-        System.out.println("- Information Loss                               ");
-        System.out.println("   *.................................: "+v0+"/"+v1);
-        System.out.println("                                                 ");
-        System.out.println("- Statistics                                     ");
-        System.out.println("   *.................................:      " + v2);
-        System.out.println("                                                 ");        
-        System.out.println("- Data:                                          ");
-        System.out.println("   *.................................:      " + v3);
-        System.out.println("                                                 ");
-        System.out.println("- Policies available                             ");
-        System.out.println("   *.................................:      " + v4);
-        System.out.println("                                                 ");
-        System.out.println("- Solution                                       ");
-        System.out.println("  * .................................:      " + v5);
-        System.out.println("  * Optimal..........................:      " + v6);
-        System.out.println("  * Time needed......................:      " + v7);
+        System.out.println("*Prosecutor re-identification risk: "+this.__riskP);
+        System.out.println("*Journalist re-identification risk: "+this.__riskJ);
+        System.out.println("*Marketer   re-identification risk: "+this.__riskM);
+        System.out.println("*K anonimity .....................: "+this.k      );
+        System.out.println("                                          ");
+        System.out.println("- Information Loss                        ");
+        System.out.println("*.................................: "+this.__v0+"/"+this.__v1);
+        System.out.println("                                          ");
+        System.out.println("- Statistics                              ");
+        System.out.println("*.................................:       " + v2);
+        System.out.println("                                          ");        
+        System.out.println("- Data:                                   ");
+        System.out.println("*.................................:       " + v3);
+        System.out.println("                                          ");
+        System.out.println("- Policies available                      ");
+        System.out.println("*.................................:       " + v4);
+        System.out.println("                                          ");
+        System.out.println("- Solution                                ");
+        System.out.println("* .................................:      " + v5);
+        System.out.println("* Optimal..........................:      " + v6);
+        System.out.println("* Time needed......................:      " + v7);
         System.out.println("================================================" );
         System.out.println("Done!");
         System.out.println("*** Total Execution Time: "
                                  + (this.__stopTime - this.__startTime)+"[ms]");
-               
-        if (this.__publishMonitor == true) {
-            
-            
-            /* Publish to monitor: k, risk and loss. */
-            int valret = this.publish_message(this.__endpoint,
-                                              System.currentTimeMillis(),
-                                              this.__resourceId,
-                                              this.__probeId,
-                                              this.__dId1,
-                                              this.__dId2,
-                                              this.__dId3,
-                                              this.__dId4,
-                                              this.__dId5,
-                                              this.__dId6,
-                                              this.__k,
-                                              riskP, 
-                                              riskJ,
-                                              riskM,
-                                              v0,
-                                              v1,
-                                              this.__maxLoop);
-        
-            if (valret == 0) {
-                System.out.println("Was not possible publish info to monitor!");
-            }
-            else {
-                System.out.println("Info published to monitor!");            
-            }
-        }
-    }
+    }  
+    
+    
     
     
     /*
@@ -500,6 +474,39 @@ public class Anonymizer extends Probe {
             }
         }
     }    
+    
+    
+    
+    
+    /*
+     * BRIEF: send data to monitor and receive the new k value from actuator.
+     * ------------------------------------------------------------------------
+     */
+    public int publish_message_monitor() throws IOException {
+    
+        /* Publish to monitor: k, risk and loss. */
+        int k = this.publish_message(this.__endpoint,
+                                     System.currentTimeMillis(),
+                                     this.__resourceId,
+                                     this.__probeId,
+                                     this.__dId1,
+                                     this.__dId2,
+                                     this.__dId3,
+                                     this.__dId4,
+                                     this.__dId5,
+                                     this.__dId6,
+                                     this.k,
+                                     this.__riskP, 
+                                     this.__riskJ,
+                                     this.__riskM,
+                                     this.__v0,
+                                     this.__v1,
+                                     this.__maxLoop);
+
+        return k;
+    }
+    
+    
     
     
     /* ********************************************************************* */
@@ -747,7 +754,7 @@ public class Anonymizer extends Probe {
         
         /* Get k value. */
         JsonNumber number = (JsonNumber)policyJsonObj.get("k");
-        this.__k = number.intValue();
+        this.k = number.intValue();
     }
 }
 
