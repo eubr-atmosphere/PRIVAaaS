@@ -5,13 +5,16 @@ import eu.atmosphere.tmaf.monitor.client.SynchronousClient;
 import eu.atmosphere.tmaf.monitor.message.Data;
 import eu.atmosphere.tmaf.monitor.message.Message;
 import eu.atmosphere.tmaf.monitor.message.Observation;
+
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 
 import javax.ws.rs.InternalServerErrorException;
-
 
 
 
@@ -24,12 +27,17 @@ public class Probe {
     /* ********************************************************************* */
     /* DEFINES                                                               */
     /* ********************************************************************* */
-    public static final int SOCKET_PORT     = 6000;
-    public static final int SOCKET_TIME_OUT = 1200000;
+    public static final int PUBLISH_ERROR = -3;
+    public static final int SOCKETL_ERROR = -2;
+    public static final int TIMEOUT_ERROR = -1;
+    
+    public static final int SOCKET_TIME_OUT = 60000;
 
     /* ********************************************************************* */
     /* ATTRIBUTES                                                            */
     /* ********************************************************************* */
+    int __socketPort = 0;
+    
     
     
     /* ********************************************************************* */
@@ -54,13 +62,19 @@ public class Probe {
                                double riskP,
                                double riskJ, 
                                double riskM,
-                               double lScore,
-                               double hScore,
-                               int max_loop) throws IOException {
+                               double score,
+                               int max_loop,
+                               int socketPort) throws IOException,
+                                                      ClassNotFoundException {
+    
+
+        long timeStampSeg  = timeStamp/1000;
+        
+        this.__socketPort = socketPort;
         
         SynchronousClient client = new SynchronousClient(endpoint);
         client.authenticate(probeId, "pass".getBytes());
-    
+
         /* Create a new message to send to monitor: */
         Message message = client.createMessage();
             
@@ -69,28 +83,24 @@ public class Probe {
         /* Set the message ID. */      
         message.setResourceId(resourceId);
             
-        Observation observation1 = new Observation(timeStamp, k     );
-        Observation observation2 = new Observation(timeStamp, riskP );
-        Observation observation3 = new Observation(timeStamp, riskJ );
-        Observation observation4 = new Observation(timeStamp, riskM );
-        Observation observation5 = new Observation(timeStamp, lScore);
-        Observation observation6 = new Observation(timeStamp, hScore);
-            
+        Observation observation1 = new Observation(timeStampSeg, k    );
+        Observation observation2 = new Observation(timeStampSeg, riskP);
+        Observation observation3 = new Observation(timeStampSeg, riskJ);
+        Observation observation4 = new Observation(timeStampSeg, riskM);
+        Observation observation5 = new Observation(timeStampSeg, score);
+        
         Data data1 = new Data(Data.Type.MEASUREMENT, dId1, observation1);
         Data data2 = new Data(Data.Type.MEASUREMENT, dId2, observation2);
         Data data3 = new Data(Data.Type.MEASUREMENT, dId3, observation3);
         Data data4 = new Data(Data.Type.MEASUREMENT, dId4, observation4);
         Data data5 = new Data(Data.Type.MEASUREMENT, dId5, observation5);
-        Data data6 = new Data(Data.Type.MEASUREMENT, dId6, observation6);
 
         message.addData(data1);
         message.addData(data2);
         message.addData(data3);
         message.addData(data4);
         message.addData(data5);
-        message.addData(data6);
 
-        int result = -1;        
         int valRet =  0;
         int count  =  0;
         
@@ -99,21 +109,22 @@ public class Probe {
                 valRet = client.send(message);
             } catch (InternalServerErrorException e) {
                 System.out.println(e);
-                valRet = 0;
+                valRet = PUBLISH_ERROR;
             } catch (Exception e) {
                 System.out.println(e);
-                valRet = 0;
+                valRet = PUBLISH_ERROR;
             }
             count = count + 1;
         }
         
         /* Wait the result of actuator (update the k?) */
-        if (valRet != 0) {
-            result = this.__listen_socket();
+        if (valRet != PUBLISH_ERROR) {
+            valRet = this.__listen_socket();
         }
         
-        return result;
+        return valRet;
     }
+    
     
     /* ********************************************************************* */
     /* PRIVATE METHODS                                                       */
@@ -122,34 +133,39 @@ public class Probe {
     * BRIEF: listen return from actuator.
     * --------------------------------------------------------------------------
     */
-    private int __listen_socket() throws IOException {
+    private int __listen_socket() throws IOException, ClassNotFoundException {
         
         int k = -1;
-        
-        try (ServerSocket server = new ServerSocket(SOCKET_PORT)) {
+               
+        try (ServerSocket server = new ServerSocket(this.__socketPort)) {
+            
             try {
                 /* Non block: timeout after 120 seconds: */
                 server.setSoTimeout(SOCKET_TIME_OUT);
                 
                 Socket client = server.accept();
+
+                DataInputStream is = new DataInputStream(
+                              new BufferedInputStream(client.getInputStream()));
                 
-                DataInputStream input=new DataInputStream(client.getInputStream());
-                k = input.readInt();
-                
-                input.close();
+                k = Integer.parseInt(is.readLine());
                 client.close();
             }
-            catch(IOException e) {
-                return -2;
+            catch (SocketException e) {
+                return TIMEOUT_ERROR;
+            }
+            catch(IOException e     ) {
+                return SOCKETL_ERROR;
             }
             finally {
                 server.close();
             }
         }
         catch(Exception e) {
-            return -2;
+            return SOCKETL_ERROR;
         }
         return k;
     }
 }
+
 /* EOF */
