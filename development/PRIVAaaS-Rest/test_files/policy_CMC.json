@@ -1,0 +1,17 @@
+{
+  "policy":[
+     {"field":"id"                          , "data":"1" },
+     {"field":"Wifes age"                   , "data":"1" },
+     {"field":"Wifes education"             , "data":"1" },
+     {"field":"Husbandseducation"           , "data":"1" },
+     {"field":"Number of children ever born", "data":"1" },
+     {"field":"Wifes religion"              , "data":"SR"},
+     {"field":"Wifes now working?"          , "data":"1" },
+     {"field":"Husbands occupation"         , "data":"1" },
+     {"field":"Standard-of-living index"    , "data":"1" },
+     {"field":"Media exposure"              , "data":"1" },
+     {"field":"Contraceptive method used"   , "data":"1" }
+    ]
+}
+
+
