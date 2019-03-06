@@ -122,21 +122,29 @@ class Instance_Privaaas(Process):
     ## ------------------------------------------------------------------------
     ##
     def run(self):
+
+        ## Get lines number from buffer;
         bashCommand = [];
         bashCommand.append("java");
         bashCommand.append("-jar");
         bashCommand.append("../PRIVAaaS/dist/PRIVAaaSAllInOneJar.jar");
         bashCommand.append(json.dumps(self.__policy));
         bashCommand.append(str(self.__k));
-       
+
         ## Command:
         process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
-                                                stdin=subprocess.PIPE);
-        process.stdin.write(str(self.__rwdata));
+                                                stdin=subprocess.PIPE, shell=False);
+        
+        for line in self.__rwdata:
+            process.stdin.write(line[0]+"\n");
+
         output, error = process.communicate();
         
         process.stdin.close();
         process.stdout.close();
+
+        print output
+        print error
 
         while True:
             time.sleep(5);
@@ -477,7 +485,7 @@ class Handle_PrivaaaS(Process):
     ## @PARAM fileStorage == csv file descriptor.
     ##
     def __parse_rwdata_file(self, fileStorage):
-        stream = io.StringIO(fileStorage.stream.read().decode("UTF8"), newline=None);
+        stream = io.StringIO(fileStorage.stream.read().decode("UTF8"), newline="\n");
         rwdata = csv.reader(stream);
 
         return rwdata;

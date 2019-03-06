@@ -83,12 +83,12 @@ public class Anonymizer extends Probe {
     public static void main(String[] args) throws Exception, IOException {
         
         InputStream inputStream = System.in;     
-        
+
         JsonObject policyJson;
         try (JsonReader jReader = Json.createReader(new StringReader(args[0]))){
             policyJson = jReader.readObject();
         }
-
+        
         /* Create an object Anonymizer: */            
         Anonymizer anonymizerObj = new Anonymizer();            
         
@@ -130,10 +130,9 @@ public class Anonymizer extends Probe {
     */
     public void run(InputStream csv, JsonObject policy, int k)
                                                  throws IOException, Exception {
-        
+     
         /* Create data from inputStreamCSV: */      
         this.dataAll=Data.create(csv,Charset.forName("UTF-8"),this.__separator);
-
         
         /* Apply all policies receveid from policy file. */
         this.apply_policies(policy.getJsonArray("policy"));
