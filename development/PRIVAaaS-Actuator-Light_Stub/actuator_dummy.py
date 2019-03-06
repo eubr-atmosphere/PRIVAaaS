@@ -73,7 +73,8 @@ def send_message_to_update_k(message):
 
     tcp.connect(dest);
  
-    print "Message received: " + str(message);
+    ## Message:
+    print "Sending message to PRIVAaaS: " + str(message);
 
     tcp.send (str(message['k']));
     tcp.close();
@@ -94,8 +95,6 @@ def send_message_to_update_k(message):
 ##
 @app.route('/', methods=['POST'])
 def process_message():
-    print 'Processing Request ' + str(request);
-
     if request.method == 'POST':
 
         try:
@@ -113,6 +112,9 @@ def process_message():
         jsonMessage = cipher.decrypt(cipherMessage);
 
         message = json.loads(jsonMessage);
+
+        ## Message Received:
+        print "Message Receveid From Execute " + str(message);
 
         ## HANDLE ACTIONS:
         if message['action'].strip() == "update k":
@@ -137,6 +139,6 @@ def process_message():
 ## MAIN                                                                      ##
 ###############################################################################
 if __name__ == '__main__':
-    app.run(debug=DEBUG, host=BIND, port=PORT);
+    app.run(host=BIND, port=PORT);
 
 ## EOF.

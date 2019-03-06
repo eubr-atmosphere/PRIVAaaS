@@ -30,7 +30,7 @@ from json         import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.74:9093";
+KAFKA_ADDRESS           = "10.0.0.88:9093";
 KAFKA_TOPIC_RECV        = "topic-privaaas-planning";
 KAFKA_TOPIC_SEND        = "topic-privaaas-execute";
 KAFKA_GROUPID           = "privaaas";
@@ -59,6 +59,7 @@ class Queue_Listen:
     consumer = None;
     producer = None;
     execute  = True;
+    __try    = 0;
 
 
     ###########################################################################
@@ -70,7 +71,6 @@ class Queue_Listen:
     ##
     def __init__(self):
         print "---------------------------------------------------------------"
-        print "INIT THE QUEUE CONSUMER                                        "
         print "TMA Planning Stub                                              "
         print "---------------------------------------------------------------"
 
@@ -95,6 +95,10 @@ class Queue_Listen:
            msgContent = message.value();
 
            if msgContent != '' and msgContent != "Broker: No more messages":
+
+               ## Message Received:
+               print "Message Received From Analyzer: " + str(msgContent);
+
                ## Getting the planning:
                msgPlanning = self.__get_planning(msgContent);
 
@@ -112,18 +116,19 @@ class Queue_Listen:
     def __get_planning(self, jsonMessage):
 
 
-
         messageReceived = json.loads(jsonMessage);
 
-        newK = str(int(messageReceived["configuration"]["k"]) + 1);
+        if self.__try == 0:
+            newK = str(int(messageReceived["configuration"]["k"]) + 1);
+            self.__try = 1;
+        else:
+            newK = str(int(messageReceived["configuration"]["k"]));
+           
 
         message = {"actuatorId" : "1",
                    "actionId"   : "1",
                    "resourceId" : "1",
                    "configuration" : {"k": newK}};
-
-        ##
-        print message
 
         self.__send_message(message);
         return 0;
@@ -163,6 +168,9 @@ class Queue_Listen:
         ## ce() calls.
         producer.poll(0)
 
+        ## Message Received:
+        print "Sending message to Execute: " + str(message);
+
         ## Asynchronously produce a message, the delivery report callback  will
         ## be triggered from poll() above, or flush() below, when the message
         ## has been successfully delivered or failed permanently.
@@ -186,8 +194,9 @@ class Queue_Listen:
         if err is not None:
              print('Message delivery failed: {}'.format(err));
         else:
-            print('Message delivered to {} [{}]'.format(message.topic(), 
-                   message.partition()));
+            #print('Message delivered to {} [{}]'.format(message.topic(), 
+            #       message.partition()));
+            pass;
 ## End Class.
 
 

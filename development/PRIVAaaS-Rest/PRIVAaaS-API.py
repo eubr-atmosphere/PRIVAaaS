@@ -205,6 +205,8 @@ class Main:
         curlRequest = pycurl.Curl();
         buffer = StringIO()
 
+        print dataToSend
+
         curlRequest.setopt(pycurl.HTTPHEADER, ['Accept: multipart/form-data']);
         curlRequest.setopt(curlRequest.URL, WEB_BIND+":"+WEB_PORT+"/create");
         curlRequest.setopt(pycurl.POST, 1);
@@ -213,7 +215,6 @@ class Main:
             ("rwdata", (curlRequest.FORM_FILE, dataToSend['rwdata'])),
             ("k", str(dataToSend['k']))]);
 
-        curlRequest.setopt(curlRequest.WRITEDATA, buffer);
         curlRequest.perform();
         curlRequest.close();
 

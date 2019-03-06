@@ -24,7 +24,6 @@ import subprocess;
 
 from flask import Flask;
 from flask import request;
-from py4j.java_gateway import JavaGateway
 
 
 from multiprocessing             import Process, Queue, Lock;
@@ -112,7 +111,7 @@ class Instance_Privaaas(Process):
         self.__policy = policy;
 
         ## K value:
-        self.__K = k;
+        self.__k = k;
 
 
     ###########################################################################
@@ -123,24 +122,21 @@ class Instance_Privaaas(Process):
     ## ------------------------------------------------------------------------
     ##
     def run(self):
-        """
         bashCommand = [];
         bashCommand.append("java");
         bashCommand.append("-jar");
-        bashCommand.append("PRIVAaaSAllInOneJar.jar");
-        bashCommand.append("-d");
-        bashCommand.append(self.__rwdata);
-        bashCommand.append("-p");
-        bashCommand.append(self.__policy);
-        bashCommand.append("-o");
-        bashCommand.append("output.csv");
-        bashCommand.append("-c");
-        bashCommand.append("config.ini");
+        bashCommand.append("../PRIVAaaS/dist/PRIVAaaSAllInOneJar.jar");
+        bashCommand.append(json.dumps(self.__policy));
+        bashCommand.append(str(self.__k));
        
         ## Command:
-        process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE);
+        process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
+                                                stdin=subprocess.PIPE);
+        process.stdin.write(str(self.__rwdata));
         output, error = process.communicate();
-        """
+        
+        process.stdin.close();
+        process.stdout.close();
 
         while True:
             time.sleep(5);

@@ -1,5 +1,4 @@
 {
-  "k":5,
   "policy":[
      {"field":"ZIPCODE" , "data":"SR"},
      {"field":"DATETIME", "data":"1" },

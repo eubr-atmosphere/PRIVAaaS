@@ -40,13 +40,13 @@ from json             import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.74:9093";
+KAFKA_ADDRESS           = "10.0.0.88:9093";
 KAFKA_TOPIC_RECV        = "topic-privaaas-execute";
 KAFKA_GROUPID           = "privaaas";
 
 DB_USER = 'privaaas';
 DB_PASS = '123mudar';
-DB_HOST = '10.0.0.75'
+DB_HOST = '10.0.0.90'
 DB_NAME = 'knowledge';
 
 
@@ -87,7 +87,6 @@ class Queue_Listen:
     ##
     def __init__(self):
         print "---------------------------------------------------------------"
-        print "INIT THE QUEUE CONSUMER                                        "
         print "TMA Execute Stub                                               "
         print "---------------------------------------------------------------"
 
@@ -109,6 +108,9 @@ class Queue_Listen:
          
            ## Get message data:
            msgContent = message.value();
+
+           ## Message Received:
+           print "Message Receveid From Planning: " + str(msgContent);
 
            if msgContent != '' and msgContent != "Broker: No more messages":
                self.__send_message(msgContent);
@@ -190,7 +192,8 @@ class Queue_Listen:
        cipher     = PKCS1_OAEP.new(key)
        cipherText = cipher.encrypt(jsonMessage)
 
-       print message;
+       ## Message:
+       print "Sending message to Actuator: " + str(message);
 
        ## Send to destiny:
        self.__sendToDestiny(cipherText,address);
@@ -206,7 +209,6 @@ class Queue_Listen:
     ##
     def __sendToDestiny(self, cipherMessage, address):
        valRet = requests.post(address, data=cipherMessage);
-       print valRet;
 
 
     ##

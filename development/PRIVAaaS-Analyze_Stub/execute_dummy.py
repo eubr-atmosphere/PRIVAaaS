@@ -35,13 +35,14 @@ from mysql.connector import errorcode;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.74:9093";
+KAFKA_ADDRESS           = "10.0.0.88:9093";
 KAFKA_TOPIC_SEND        = "topic-privaaas-planning";
+KAFKA_TOPIC_RECV         = "topic-monitor";
 KAFKA_GROUPID           = "privaaas";
 
 DB_USER = 'privaaas';
 DB_PASS = '123mudar';
-DB_HOST = '10.0.0.75'
+DB_HOST = '10.0.0.90'
 DB_NAME = 'knowledge';
 
 
@@ -71,6 +72,7 @@ class Queue_Listen:
     __lastDate = '0001-01-01 00:00:00.000000';
     __cnx      = None;
     __date     = '';
+    __count    = 0;
 
 
     ###########################################################################
@@ -82,10 +84,10 @@ class Queue_Listen:
     ##
     def __init__(self):
         print "---------------------------------------------------------------"
-        print "INIT THE QUEUE CONSUMER                                        "
         print "TMA Analyze Stub                                               "
         print "---------------------------------------------------------------"
 
+        self.consumer = self.__kafka_consumer();
         self.__lastDate = time.strptime(self.__lastDate,"%Y-%m-%d %H:%M:%S.%f");
 
 
@@ -99,14 +101,59 @@ class Queue_Listen:
     def run(self):
 
         while True:
-            print "Waiting for new data!"
-            self.__watch_database();
-            time.sleep(10);
+            self.__watch_kafka();
 
 
     ###########################################################################
     ## PRIVATE METHODS                                                       ##
     ###########################################################################
+    ##
+    ## BRIEF: consumer messages from kafka queue.
+    ## ------------------------------------------------------------------------
+    ##
+    def __kafka_consumer(self):
+
+        self.consumer = Consumer(
+            {
+                 "api.version.request" : True,
+                 "enable.auto.commit"  : True,
+                 "group.id"            : KAFKA_GROUPID,
+                 "bootstrap.servers"   : KAFKA_ADDRESS,
+                 "default.topic.config": {"auto.offset.reset": "earliest"}
+             }
+        );
+        self.consumer.subscribe([KAFKA_TOPIC_RECV]);
+        return self.consumer;
+
+
+    ##
+    ## BRIEF:
+    ## ------------------------------------------------------------------------
+    ##
+    def __watch_kafka(self):
+        while self.execute:
+           message = self.consumer.poll();
+
+           ## Get message data:
+           msgContent = message.value();
+
+           if msgContent != '' and msgContent != "Broker: No more messages":
+               msgContent = json.loads(msgContent);
+
+               ## Message Received:
+               print "Message Receveid From Knowledge: " + str(msgContent);
+
+               k = msgContent["data"][0]["observations"][0]["value"];
+               self.__analyze_score(k);
+
+        self.__consumer.close();
+
+
+
+    ##
+    ## BRIEF:
+    ## ------------------------------------------------------------------------
+    ##
     def __watch_database(self):
 
        valuesList = {};
@@ -131,7 +178,10 @@ class Queue_Listen:
            self.__date = values[3];
        
        if valuesList.has_key(1): 
-           print "New data found!"
+           if self.__count == 0:
+               self.__count = 1;
+               return 0;
+
            self.__analyze_score(valuesList[1]);
 
        return 0;
@@ -145,7 +195,6 @@ class Queue_Listen:
         message = {"probeId": "8","configuration": {"k": k}};
 
         jsonMessage = json.dumps(message);
-        print jsonMessage
 
         self.__send_message(jsonMessage);
 
@@ -162,6 +211,9 @@ class Queue_Listen:
         ## Trigger any available delivery report callbacks from previous produ-
         ## ce() calls.
         producer.poll(0)
+
+        ## Message Received:
+        print "Sending message to Planning: " + str(message);
 
         ## Asynchronously produce a message, the delivery report callback  will
         ## be triggered from poll() above, or flush() below, when the message 
@@ -186,8 +238,9 @@ class Queue_Listen:
         if err is not None:
              print('Message delivery failed: {}'.format(err));
         else:
-            print('Message delivered to {} [{}]'.format(message.topic(), 
-                   message.partition()));
+            pass;
+            #print('Message delivered to {} [{}]'.format(message.topic(), 
+            #       message.partition()));
 
 
     ##
