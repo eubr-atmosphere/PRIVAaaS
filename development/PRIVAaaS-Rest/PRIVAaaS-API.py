@@ -42,7 +42,8 @@ WEB_PORT   = "9000";
 ##
 def log(text):
     ## Print text:
-    print text;
+    #print text;
+    pass
 ## END.
 
 
@@ -159,7 +160,7 @@ class Main:
     ## @PARAM arguments == arguments array.
     ##
     def __create(self, arguments):
-        valRet = "{}";
+        valRet = {};
 
         if len(arguments) == 3:
             dataToSend = {
@@ -182,7 +183,20 @@ class Main:
     ## @PARAM arguments == arguments array.
     ##
     def __finish(self, arguments):
-        print arguments
+
+        valRet = '{"status": -1}';
+
+        if len(arguments) == 1:
+            dataToSend = {
+                "instanceID" : arguments[0]
+            };
+
+            valRet = self.__sendCurlPost(dataToSend, "/finish");
+        else:
+            self.__usage("Few arguments!");
+
+        valRet = json.loads(valRet);
+        return valRet;
 
 
     ##
@@ -191,7 +205,7 @@ class Main:
     ##
     ##
     def __usage(self, stringToShow):
-        print stringToShow;
+        #print stringToShow;
         print "..."
 
 
@@ -205,8 +219,6 @@ class Main:
         curlRequest = pycurl.Curl();
         buffer = StringIO()
 
-        print dataToSend
-
         curlRequest.setopt(pycurl.HTTPHEADER, ['Accept: multipart/form-data']);
         curlRequest.setopt(curlRequest.URL, WEB_BIND+":"+WEB_PORT+"/create");
         curlRequest.setopt(pycurl.POST, 1);
@@ -215,10 +227,12 @@ class Main:
             ("rwdata", (curlRequest.FORM_FILE, dataToSend['rwdata'])),
             ("k", str(dataToSend['k']))]);
 
+        curlRequest.setopt(pycurl.WRITEFUNCTION, buffer.write);
         curlRequest.perform();
         curlRequest.close();
 
         bodyAnswer = buffer.getvalue();
+        buffer.close();
         return bodyAnswer;
 
 
@@ -233,13 +247,14 @@ class Main:
 
         curlRequest.setopt(curlRequest.URL, WEB_BIND+":"+WEB_PORT+postPlace);
         curlRequest.setopt(pycurl.HTTPHEADER, ['Accept: application/json']);
-        curlRequest.setopt(curlRequest.WRITEDATA, buffer);
         curlRequest.setopt(pycurl.POST, 1);
         curlRequest.setopt(pycurl.POSTFIELDS, json.dumps(dataToSend));
+        curlRequest.setopt(pycurl.WRITEFUNCTION, buffer.write);
         curlRequest.perform();
         curlRequest.close();
 
         bodyAnswer = buffer.getvalue();
+        buffer.close();
         return bodyAnswer;
 
 

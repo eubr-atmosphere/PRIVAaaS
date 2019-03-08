@@ -10,7 +10,7 @@
 ###############################################################################
 ## IMPORT                                                                    ##
 ###############################################################################
-
+import json;
 
 
 
@@ -95,7 +95,7 @@ class Show_in_Shell:
     ## @PARAM arguments == arguments to show.
     ##
     def create(self, arguments):
-        if int(arguments["status"]) == SUCCESS:
+        if int(arguments["statusReturn"]) == SUCCESS:
             status = "create with sucess!"
         else:
             status = "a problem was found - code " + arguments['status'];
@@ -110,7 +110,25 @@ class Show_in_Shell:
     ## @PARAM arguments == arguments to show.
     ##
     def finish(self, arguments):
-        print arguments
+
+ 
+       print "STATUS"
+       print "---------------------------------------------------"
+       print "status: " + str(arguments["status"]);
+       print "---------------------------------------------------"
+
+       print "METRICS"
+       if arguments.has_key("metrics"):
+           print(json.dumps(arguments["metrics"], indent=4, sort_keys=True)); 
+       print "---------------------------------------------------"
+
+       if arguments.has_key("dataAnonymized"):
+           print(json.dumps(arguments["dataAnonymized"], 
+                            indent=4, 
+                            sort_keys=True)); 
+
+
+
 
 
     ##########################################################################

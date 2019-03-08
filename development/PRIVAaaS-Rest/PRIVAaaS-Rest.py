@@ -39,12 +39,14 @@ from multiprocessing             import Process, Queue, Lock;
 ## DEFINITIONS                                                               ##
 ###############################################################################
 SUCCESS    = 0x0000;
-FINISH     = 0x0001;
+FINISHED   = 0x0001;
 DONT_EXIST = 0x0002;
 EXIST      = 0x0003;
 RUNNING    = 0x0010;
 GET_RESULT = 0x0011;
 GET_K      = 0x0012;
+ERROR      = 0x0013;
+FAILED     = 0x0014;
 
 WEB_DEBUG  = "False";
 WEB_BIND   = "127.0.0.1";
@@ -90,18 +92,18 @@ class Instance_Privaaas(Process):
     ###########################################################################
     ## ATTRIBUTES                                                            ##
     ###########################################################################
-    status       = {};
-    __instanceID = None;
-    __policy     = None;
-    __csvFile    = None;
-    __resultFile = None;
-    __k          = None;
-
+    status         = RUNNING;
+    __instanceID   = None;
+    __policy       = None;
+    __rwdata       = None;
+    storedK        = -1;
+    anonymizedData= None;
+   
 
     ###########################################################################
     ## SPECIAL METHODS                                                       ##
     ###########################################################################
-    def __init__(self, instanceID, rwdata, policy, k):
+    def __init__(self, instanceID, rwdata, policy):
         super(Instance_Privaaas, self).__init__();
 
         ## Set instance ID:
@@ -109,9 +111,6 @@ class Instance_Privaaas(Process):
 
         self.__rwdata = rwdata;
         self.__policy = policy;
-
-        ## K value:
-        self.__k = k;
 
 
     ###########################################################################
@@ -122,60 +121,87 @@ class Instance_Privaaas(Process):
     ## ------------------------------------------------------------------------
     ##
     def run(self):
-
-        ## Get lines number from buffer;
-        bashCommand = [];
-        bashCommand.append("java");
-        bashCommand.append("-jar");
-        bashCommand.append("../PRIVAaaS/dist/PRIVAaaSAllInOneJar.jar");
-        bashCommand.append(json.dumps(self.__policy));
-        bashCommand.append(str(self.__k));
-
-        ## Command:
-        process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
-                                                stdin=subprocess.PIPE, shell=False);
-        
-        for line in self.__rwdata:
-            process.stdin.write(line[0]+"\n");
-
-        output, error = process.communicate();
-        
-        process.stdin.close();
-        process.stdout.close();
-
-        print output
-        print error
-
         while True:
             time.sleep(5);
-
-        log("Remove instance: " + str(self.__instanceId));
         return 0;
 
 
     ##
-    ## BRIEF: receive and execute a commnad from external.
+    ## BRIEF: execute command.
     ## ------------------------------------------------------------------------
-    ## @PARAM command == command to execute.
     ##
-    def execute(self, command, paramanetes={}):
-        
-        if  command == GET_RESULT:
-            rwdata, policy, k = self.__get_result();
-            return rwdata, policy, k;
+    def execute(self, k):
 
-        return 0;
+        if self.storedK >= k:
+            self.status = FINISHED;
+        else:    
+            self.storedK = k;
+
+            ## Get lines number from buffer;
+            bashCommand = [];
+            bashCommand.append("java");
+            bashCommand.append("-jar");
+            bashCommand.append("../PRIVAaaS/dist/PRIVAaaSAllInOneJar.jar");
+            bashCommand.append(json.dumps(self.__policy));
+            bashCommand.append(str(self.storedK));
+
+            ## Command:
+            process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
+                                           stdin=subprocess.PIPE, shell=False);
+        
+            for line in self.__rwdata:
+                process.stdin.write(line[0]+"\n");
+
+            output, error = process.communicate();
+        
+            process.stdin.close();
+            process.stdout.close();
+
+            self.__parse_return(output, error);
+
+            ## Send to monitor the metrics.
+            if self.metrics != {}:
+                self.__send_to_monitor();
+            else:
+                return ERROR;
+
+        return SUCCESS;
+
 
 
     ###########################################################################
     ## PRIVATE METHODS                                                       ##
     ###########################################################################
     ##
-    ## BRIEF: get k value; 
+    ## BRIEF: perform the parse of json to return.
+    ## ------------------------------------------------------------------------
+    ## @PARAM dataReceived == data output.
+    ## @PARAM dataError    == if there are errors this variable is not empty.
+    ## 
+    def __parse_return(self, dataReceived, dataError):
+        try:
+            dataJson = json.loads(dataReceived);
+
+            self.metrics        = dataJson['parameter'];
+            self.anonymizedData = dataJson['data'];
+        except:
+            self.metrics        = {};
+            self.anonymizedData = {};
+            log(dataError);
+
+            return FAILED;
+
+        return SUCCESS;
+
+    
+    ##
+    ## BRIEF: send metrics to monitor.
     ## ------------------------------------------------------------------------
     ##
-    def __get_result(self):
-        return self.__rwdata, self.__policy, self.__k;
+    def __send_to_monitor(self):
+        #print self.metrics;
+        pass
+
 ## END CLASS.
 
 
@@ -260,7 +286,7 @@ class Handle_PrivaaaS(Process):
             try:
                 instanceID = inputReceived['instanceID'];
             except:
-                return json.dumps({"status":"1"});
+                return json.dumps({"status":1});
 
             ## Case all parameters are ok create a new instance in the system.
             valRet = self.__finish(instanceID);
@@ -301,13 +327,11 @@ class Handle_PrivaaaS(Process):
             ## Return Json result:
             return json.dumps(valRet);
 
-
         ## ----------------------------------------------------------------- ##
-        ## RESULT request:
+        ## UPDATE K request:
         ## ----------------------------------------------------------------- ##
-        @webApp.route('/result', methods=['POST'])
-        def result():
-
+        @webApp.route('/update_k', methods=['POST'])
+        def update_k():
             ## Load json file:
             inputReceived = request.get_json(force=True);
 
@@ -317,7 +341,8 @@ class Handle_PrivaaaS(Process):
                 return json.dumps({"status":"1"});
 
             ## Get the instanceID status:
-            valRet = self.__results(inputReceived['instanceID']);
+            valRet = self.__update_k(inputReceived['instanceID'], 
+                                     inputReceived['k']);
 
             ## Return Json result:
             return json.dumps(valRet);
@@ -341,24 +366,48 @@ class Handle_PrivaaaS(Process):
     ## @PARAM k          == initial k to be used.
     ##
     def __create(self, instanceID, rwdata, policy, k):
-        stauts = "1";
+        statusReturn = ERROR;
+
+        instanceID = int(instanceID);
 
         ## Check if the requestId exist in system (other instace with same re-
         ## quest id is running.
         if self.__check_exist(instanceID) != EXIST:
             self.__instances[instanceID]=Instance_Privaaas(instanceID,
                                                            rwdata,
-                                                           policy,
-                                                           k);
+                                                           policy);
             self.__instances[instanceID].daemon = True;
             self.__instances[instanceID].start();
+            self.__instances[instanceID].execute(k);
 
-            status = "0";
+            statusReturn = SUCCESS;
         else:
             log("Instance with same ID is running! Stop it before create!");
-            instanceID;
         
-        return {"status" : status, "instanceID" : instanceID};
+        return  {'statusReturn': statusReturn, 'instanceID': instanceID};
+
+
+    ##
+    ## BRIEF: update k received from probe.
+    ## ------------------------------------------------------------------------
+    ## @PARAM instanceId == instance identificator.
+    ## @PARAM k          == k to be used.
+    ##
+    def __update_k(self, instanceID, k):
+        statusReturn = ERROR;
+
+        instanceID = int(instanceID);
+
+        ## Check if the requestId exist in system (other instace with same re-
+        ## quest id is running.
+        if self.__check_exist(instanceID) != EXIST:
+            self.__instances[instanceID].execute(k);
+
+            statusReturn = SUCCESS;
+        else:
+            log("Instance with same ID is running! Stop it before create!");
+
+        return  {'statusReturn': statusReturn, 'instanceID': instanceID};
 
 
     ##
@@ -367,19 +416,27 @@ class Handle_PrivaaaS(Process):
     ## @PARAM instanceID == instance identificator.
     ##
     def __finish(self, instanceID):
-        status = "1";
+        status = 1;
+
+        instanceID = int(instanceID);
 
         ## Verify if the instanceID exist in the system. If EXIST, finish the
         ## instance and remove from system:
         if self.__check_exist(instanceID) == EXIST:
-            self.__instances[instanceID].execute(FINISH);
+            metrics = self.__instances[instanceID].metrics;
+            data    = self.__instances[instanceID].anonymizedData;
+
             self.__instances[instanceID].terminate();
             self.__instances[instanceID].join();
-
             del self.__instances[instanceID];
 
             log("Deleting the instance: " + str(instanceID));
-            status = "0";
+
+            return { 
+                "status"         : 0,
+                "metrics"        : metrics,
+                "dataAnonymized" : data
+             };
         else:
             log("Instance not found...: " + str(instanceID));
 
@@ -392,11 +449,10 @@ class Handle_PrivaaaS(Process):
     ## @PARAM instanceID == instance identificator.
     ##
     def __status(self, instanceID):
+        instanceID = int(instanceID);
+
         try:
-            if self.__instances[instanceID].is_alive() == True:
-                status = "Running";
-            else:
-                status = "Stoped";
+            status = self.__instances[instanceID].status;
         except:
             ## InstanceID not found in the enviroment, verify the ID.
             status = "notFound";
@@ -423,25 +479,6 @@ class Handle_PrivaaaS(Process):
 
 
     ##
-    ## BRIEF: get the result from instance execution.
-    ## ------------------------------------------------------------------------
-    ## @PARAM instanceID == instance identificator.
-    ##
-    def __get_result(self, instanceID):
-        return 0;
-
-
-    ##
-    ## BRIEF: get the instance ID configuration.
-    ## ------------------------------------------------------------------------
-    ## @PARAM instanceId == instance identificator.
-    ##
-    #def get_config(self, instanceID):
-    #    rwdata, policy = self.__instances[instanceID].execute(GET_CONFIG);
-    #    return 0;
-
-
-    ##
     ## BRIEF: set instance ID k.
     ## ------------------------------------------------------------------------
     ## @PARAM instanceId == instance identificator.
@@ -456,12 +493,12 @@ class Handle_PrivaaaS(Process):
     ## ------------------------------------------------------------------------
     ## @PARAM instanceId == instance identificator.
     ##
-    def __check_exist(self, instanceId):
+    def __check_exist(self, instanceID):
 
-        if  not self.__instances.has_key(instanceId): 
+        if  not self.__instances.has_key(instanceID): 
             return DONT_EXIST;
 
-        elif self.__instances.has_key(instanceId):
+        else:
             return EXIST;
 
         return 0;
