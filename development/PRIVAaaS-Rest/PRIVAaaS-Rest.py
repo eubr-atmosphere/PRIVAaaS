@@ -22,11 +22,16 @@ import io;
 import csv;
 import subprocess;
 
-from flask import Flask;
-from flask import request;
-
-
-from multiprocessing             import Process, Queue, Lock;
+from flask             import Flask;
+from flask             import request;
+from Crypto.PublicKey  import RSA;
+from Crypto.Cipher     import PKCS1_OAEP;
+from Crypto            import Random;
+from multiprocessing   import Process, Queue, Lock;
+from lib.data          import Data; 
+from lib.message       import Message, ComplexEncoder;
+from lib.observation   import Observation;
+from lib.communication import Communication;
 
 
 
@@ -52,6 +57,14 @@ WEB_DEBUG  = "False";
 WEB_BIND   = "127.0.0.1";
 WEB_PORT   = 9000;
 
+DCODE_1 = 1;
+DCODE_2 = 2;
+DCODE_3 = 3;
+DCODE_4 = 4;
+DCODE_5 = 5;
+DCODE_6 = 6;
+MONITOR_ENDPOINT = "http://127.0.0.1:5000/monitor" 
+
 
 
 
@@ -67,7 +80,6 @@ WEB_PORT   = 9000;
 ## @PARAM text == text to log.
 ##
 def log(text):
-
     ## Print text:
     print text;
 ## END.
@@ -82,6 +94,92 @@ def log(text):
 ###############################################################################
 ## CLASSES                                                                   ##
 ###############################################################################
+class Probe:
+    """
+    CLASSE Probe:
+    ---------------------------------------------------------------------------
+    """
+
+    ###########################################################################
+    ## ATTRIBUTES                                                            ##
+    ###########################################################################
+    __communication = None;
+
+
+    ###########################################################################
+    ## SPECIAL METHODS                                                       ##
+    ###########################################################################
+    def __init__(self):
+        self.__communication = Communication(MONITOR_ENDPOINT);
+
+
+    ###########################################################################
+    ## PUBLIC METHODS                                                        ##
+    ###########################################################################
+    def send_to_monitor(self, dataReceived):
+
+        message = Message(probeId=1,
+                         resourceId=101098,
+                         messageId=0,
+                         sentTime=int(time.time()),
+                         data=None);
+
+        timestamp = int(time.time());
+
+        ## IDS:
+        ## DCODE_1 == k
+        ## DCODE_2 == risk_journalist
+        ## DCODE_3 == risk_marketer
+        ## DCODE_4 == risk_prosecutor
+        ## DCODE_5 == lScore
+        ## DCODE_6 == instance ID
+
+        dt = Data(type="measurement", descriptionId=DCODE_1, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['k']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        dt = Data(type="measurement", descriptionId=DCODE_2, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['riskJ']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        dt = Data(type="measurement", descriptionId=DCODE_3, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['riskM']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        dt = Data(type="measurement", descriptionId=DCODE_4, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['riskP']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        dt = Data(type="measurement", descriptionId=DCODE_5, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['lScore']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        dt = Data(type="measurement", descriptionId=DCODE_5, observations=None);
+	obs = Observation(time=timestamp, value=dataReceived['id']);
+	dt.add_observation(observation=obs);
+        message.add_data(data=dt);
+
+        ## Data in json struct:
+        jsonData = json.dumps(message.reprJSON(), cls=ComplexEncoder);
+
+        valRet = self.__communication.send_message(jsonData);
+        return valRet;
+
+
+## END OF CLASS.
+
+
+
+
+
+
+
+
 class Instance_Privaaas(Process):
 
     """
@@ -97,7 +195,8 @@ class Instance_Privaaas(Process):
     __policy       = None;
     __rwdata       = None;
     storedK        = -1;
-    anonymizedData= None;
+    anonymizedData = None;
+    probe          = None;
    
 
     ###########################################################################
@@ -111,6 +210,8 @@ class Instance_Privaaas(Process):
 
         self.__rwdata = rwdata;
         self.__policy = policy;
+
+        self.probe = Probe();
 
 
     ###########################################################################
@@ -136,6 +237,9 @@ class Instance_Privaaas(Process):
             self.status = FINISHED;
         else:    
             self.storedK = k;
+            print self.storedK
+
+            csvData = csv.reader(self.__rwdata);
 
             ## Get lines number from buffer;
             bashCommand = [];
@@ -149,7 +253,7 @@ class Instance_Privaaas(Process):
             process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
                                            stdin=subprocess.PIPE, shell=False);
         
-            for line in self.__rwdata:
+            for line in csvData:
                 process.stdin.write(line[0]+"\n");
 
             output, error = process.communicate();
@@ -158,10 +262,20 @@ class Instance_Privaaas(Process):
             process.stdout.close();
 
             self.__parse_return(output, error);
+            self.__rwdata.seek(0);
 
             ## Send to monitor the metrics.
             if self.metrics != {}:
-                self.__send_to_monitor();
+                messageToMonitor = {
+                    "k"      : self.metrics['k'],
+                    "riskJ"  : self.metrics['risk_journalist'],
+                    "riskM"  : self.metrics['risk_marketer'  ],
+                    "riskP"  : self.metrics['risk_prosecutor'],
+                    "lScore" : self.metrics['low_score'],
+                    "id"     : self.__instanceID
+                };
+
+                self.probe.send_to_monitor(messageToMonitor);
             else:
                 return ERROR;
 
@@ -192,15 +306,6 @@ class Instance_Privaaas(Process):
             return FAILED;
 
         return SUCCESS;
-
-    
-    ##
-    ## BRIEF: send metrics to monitor.
-    ## ------------------------------------------------------------------------
-    ##
-    def __send_to_monitor(self):
-        #print self.metrics;
-        pass
 
 ## END CLASS.
 
@@ -332,17 +437,28 @@ class Handle_PrivaaaS(Process):
         ## ----------------------------------------------------------------- ##
         @webApp.route('/update_k', methods=['POST'])
         def update_k():
-            ## Load json file:
-            inputReceived = request.get_json(force=True);
-
             try:
-                instanceID = inputReceived['instanceID'];
+                cipherMessage = request.data;
             except:
-                return json.dumps({"status":"1"});
+                return "Error!";
+
+            ## Get the private key value:
+            key = RSA.importKey(open('./encode_decode_key').read());
+
+            ## Create a new objetc that handle de criptographic key:
+            cipher = PKCS1_OAEP.new(key);
+
+            ## Descript the message received:
+            jsonMessage = cipher.decrypt(cipherMessage);
+
+            message = json.loads(jsonMessage);
+
+            ## Get real data:
+            instanceID = message['configuration']['instanceID'];
+            newK       = message['configuration']['k'];
 
             ## Get the instanceID status:
-            valRet = self.__update_k(inputReceived['instanceID'], 
-                                     inputReceived['k']);
+            valRet = self.__update_k(instanceID, newK);
 
             ## Return Json result:
             return json.dumps(valRet);
@@ -400,12 +516,12 @@ class Handle_PrivaaaS(Process):
 
         ## Check if the requestId exist in system (other instace with same re-
         ## quest id is running.
-        if self.__check_exist(instanceID) != EXIST:
+        if self.__check_exist(instanceID) == EXIST:
             self.__instances[instanceID].execute(k);
 
             statusReturn = SUCCESS;
         else:
-            log("Instance with same ID is running! Stop it before create!");
+            log("Instance not found...: " + str(instanceID));
 
         return  {'statusReturn': statusReturn, 'instanceID': instanceID};
 
@@ -478,16 +594,6 @@ class Handle_PrivaaaS(Process):
         return dictReturn;
 
 
-    ##
-    ## BRIEF: set instance ID k.
-    ## ------------------------------------------------------------------------
-    ## @PARAM instanceId == instance identificator.
-    ## @PARAM newK       == new k to set.
-    ##
-    def __update_k(self, instanceID, newK):
-        return 0;
-
-
     ## 
     ## BRIEF: check if an instance exist.
     ## ------------------------------------------------------------------------
@@ -495,7 +601,7 @@ class Handle_PrivaaaS(Process):
     ##
     def __check_exist(self, instanceID):
 
-        if  not self.__instances.has_key(instanceID): 
+        if  not self.__instances.has_key(int(instanceID)): 
             return DONT_EXIST;
 
         else:
@@ -522,8 +628,7 @@ class Handle_PrivaaaS(Process):
     ## @PARAM fileStorage == csv file descriptor.
     ##
     def __parse_rwdata_file(self, fileStorage):
-        stream = io.StringIO(fileStorage.stream.read().decode("UTF8"), newline="\n");
-        rwdata = csv.reader(stream);
+        rwdata = io.StringIO(fileStorage.stream.read().decode("UTF8"), newline="\n");
 
         return rwdata;
 ## END CLASS.
