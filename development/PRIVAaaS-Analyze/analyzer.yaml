@@ -1,0 +1,52 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: analyzer
+spec:
+  serviceName: "analyzer"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: analyzer
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: analyzer
+        image: docker-repo.example.com:5000/analyzer:0.1
+        ports:
+        - containerPort: 8080
+          name: analyzer
+      - name: dashboard
+        image: docker-repo.example.com:5000/analyzer_dashboard:0.1
+        ports:
+        - containerPort: 80
+          name: dashboard
+      - name: mysql
+        image: mysql:5.6
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: root
+        - name: MYSQL_DATABASE
+          value: knowledgedb
+        - name: MYSQL_USER
+          value: atm
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-adm-secret
+              key: secret_key
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
