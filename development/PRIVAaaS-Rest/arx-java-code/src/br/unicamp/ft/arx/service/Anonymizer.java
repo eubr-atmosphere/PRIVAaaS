@@ -1,17 +1,11 @@
 package br.unicamp.ft.arx.service;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.FileNotFoundException;
 import java.io.FileInputStream;
 import java.io.StringReader;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.math.BigDecimal;
-
 
 import java.sql.*;
 
@@ -19,7 +13,6 @@ import javax.json.*;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -66,12 +59,12 @@ public class Anonymizer extends Probe {
     private long             __startTime;
     private long             __stopTime;
     private char             __separator;
-    private JsonObject       __policyJson;
+    private int              __k;
     
     public Data              dataAll;
     public ARXResult         result;
     public ARXNode           node;
-     
+    
         
     
     
@@ -131,6 +124,8 @@ public class Anonymizer extends Probe {
     public void run(InputStream csv, JsonObject policy, int k)
                                                  throws IOException, Exception {
      
+        this.__k = k;
+        
         /* Create data from inputStreamCSV: */      
         this.dataAll=Data.create(csv,Charset.forName("UTF-8"),this.__separator);
         
@@ -214,20 +209,21 @@ public class Anonymizer extends Probe {
         /**/
         JsonObjectBuilder jResult = Json.createObjectBuilder();
         
-        jResult.add("start_time"      , this.__startTime);
-        jResult.add("stop_time"       , this.__stopTime );
-        jResult.add("risk_prosecutor" , riskP);
-        jResult.add("risk_journalist" , riskJ);
-        jResult.add("risk_marketer"   , riskM);
-        jResult.add("low_score"       , this.node.getLowestScore().toString() );
-        jResult.add("high_score"      , this.node.getHighestScore().toString());
-        jResult.add("polices"         , this.result.getLattice().getSize()    );
-        jResult.add("optimal"         , this.result.getLattice().isComplete() );
-        jResult.add("time_needed"     , this.result.getTime());
-        jResult.add("solutions"       , Arrays.toString(this.node.getTransformation()));
-        jResult.add("quasi_identiying",size);
-        jResult.add("number_rows"     , this.dataAll.getHandle().getNumRows());
+        jResult.add("start_time"         , this.__startTime);
+        jResult.add("stop_time"          , this.__stopTime );
+        jResult.add("risk_prosecutor"    , riskP);
+        jResult.add("risk_journalist"    , riskJ);
+        jResult.add("risk_marketer"      , riskM);
+        jResult.add("low_score"          , this.node.getLowestScore().toString() );
+        jResult.add("high_score"         , this.node.getHighestScore().toString());
+        jResult.add("polices"            , this.result.getLattice().getSize()    );
+        jResult.add("optimal"            , this.result.getLattice().isComplete() );
+        jResult.add("time_needed"        , this.result.getTime());
+        jResult.add("solutions"          , Arrays.toString(this.node.getTransformation()));
+        jResult.add("quasi_identiying"   , size);
+        jResult.add("number_rows"        , this.dataAll.getHandle().getNumRows());
         jResult.add("equivalence_classes", equivalenceClasses.toString());
+        jResult.add("k"                  , this.__k);
 
         /* Get the execution return and write in json format. */
         JsonObject resultJsonParameters = jResult.build();
