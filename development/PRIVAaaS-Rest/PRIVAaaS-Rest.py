@@ -57,14 +57,18 @@ WEB_DEBUG  = "False";
 WEB_BIND   = "127.0.0.1";
 WEB_PORT   = 9000;
 
-DCODE_1 = 1;
-DCODE_2 = 2;
-DCODE_3 = 3;
-DCODE_4 = 4;
-DCODE_5 = 5;
-DCODE_6 = 6;
-MONITOR_ENDPOINT = "http://127.0.0.1:5000/monitor" 
+PROBE_ID = 7
 
+DCODE_1 = 30;
+DCODE_2 = 31;
+DCODE_3 = 32;
+DCODE_4 = 33;
+DCODE_5 = 34;
+DCODE_6 = 35;
+MONITOR_ENDPOINT = "http://10.100.166.233:5000/monitor" 
+
+## TODO put in config file:
+EXEC="arx-java-code/dist/PRIVAaaSAllInOneJar.jar"
 
 
 
@@ -118,7 +122,7 @@ class Probe:
     ###########################################################################
     def send_to_monitor(self, dataReceived):
 
-        message = Message(probeId=1,
+        message = Message(probeId=PROBE_ID,
                          resourceId=101098,
                          messageId=0,
                          sentTime=int(time.time()),
@@ -140,26 +144,26 @@ class Probe:
         message.add_data(data=dt);
 
         dt = Data(type="measurement", descriptionId=DCODE_2, observations=None);
-	obs = Observation(time=timestamp, value=dataReceived['riskJ']);
+	obs = Observation(time=timestamp, value=float(dataReceived['riskJ']));
 	dt.add_observation(observation=obs);
         message.add_data(data=dt);
 
         dt = Data(type="measurement", descriptionId=DCODE_3, observations=None);
-	obs = Observation(time=timestamp, value=dataReceived['riskM']);
+	obs = Observation(time=timestamp, value=float(dataReceived['riskM']));
 	dt.add_observation(observation=obs);
         message.add_data(data=dt);
 
         dt = Data(type="measurement", descriptionId=DCODE_4, observations=None);
-	obs = Observation(time=timestamp, value=dataReceived['riskP']);
+	obs = Observation(time=timestamp, value=float(dataReceived['riskP']));
 	dt.add_observation(observation=obs);
         message.add_data(data=dt);
 
         dt = Data(type="measurement", descriptionId=DCODE_5, observations=None);
-	obs = Observation(time=timestamp, value=dataReceived['lScore']);
+	obs = Observation(time=timestamp, value=float(dataReceived['lScore']));
 	dt.add_observation(observation=obs);
         message.add_data(data=dt);
 
-        dt = Data(type="measurement", descriptionId=DCODE_5, observations=None);
+        dt = Data(type="measurement", descriptionId=DCODE_6, observations=None);
 	obs = Observation(time=timestamp, value=dataReceived['id']);
 	dt.add_observation(observation=obs);
         message.add_data(data=dt);
@@ -167,6 +171,8 @@ class Probe:
         ## Data in json struct:
         jsonData = json.dumps(message.reprJSON(), cls=ComplexEncoder);
 
+
+        print jsonData
         valRet = self.__communication.send_message(jsonData);
         return valRet;
 
@@ -237,15 +243,13 @@ class Instance_Privaaas(Process):
             self.status = FINISHED;
         else:    
             self.storedK = k;
-            print self.storedK
-
             csvData = csv.reader(self.__rwdata);
 
             ## Get lines number from buffer;
             bashCommand = [];
             bashCommand.append("java");
             bashCommand.append("-jar");
-            bashCommand.append("../PRIVAaaS/dist/PRIVAaaSAllInOneJar.jar");
+            bashCommand.append(EXEC);
             bashCommand.append(json.dumps(self.__policy));
             bashCommand.append(str(self.storedK));
 
@@ -644,7 +648,7 @@ class Handle_PrivaaaS(Process):
 ## MAIN                                                                      ##
 ###############################################################################
 if __name__ == "__main__":
-
+#    """
     try:
         main = Handle_PrivaaaS();
         main.run();
@@ -656,5 +660,16 @@ if __name__ == "__main__":
         main.purge();
 
     sys.exit(0);
+#    """
+    probe = Probe()
+    messageToMonitor = {
+                    "k"      : 10,
+                    "riskJ"  : 0.004545454545454545,
+                    "riskM"  : 0.004545454545454545,
+                    "riskP"  : 0.004545454545454545,
+                    "lScore" : 0.004545454545454545,
+                    "id"     : 1
+    };
+    probe.send_to_monitor(messageToMonitor)
 
 ## EOF.

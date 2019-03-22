@@ -13,3 +13,4 @@
 /development/PRIVAaaS/dist/
 /development/PRIVAaaS/nbproject/private/
 /development/PRIVaaS_Actuator/nbproject/private/
+*.pyc

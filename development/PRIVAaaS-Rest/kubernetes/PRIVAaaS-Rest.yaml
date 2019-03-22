@@ -1,0 +1,6 @@
+apiVersion:
+kind:
+metadata:
+    name: PRIVAaaS-Rest
+spec:
+   template:
