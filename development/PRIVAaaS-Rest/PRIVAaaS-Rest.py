@@ -57,7 +57,8 @@ WEB_DEBUG  = "False";
 WEB_BIND   = "127.0.0.1";
 WEB_PORT   = 9000;
 
-PROBE_ID = 7
+PROBE_ID = 8
+RESOURCE_ID = 8
 
 DCODE_1 = 30;
 DCODE_2 = 31;
@@ -65,12 +66,12 @@ DCODE_3 = 32;
 DCODE_4 = 33;
 DCODE_5 = 34;
 DCODE_6 = 35;
-MONITOR_ENDPOINT = "http://10.100.166.233:5000/monitor" 
+MONITOR_ENDPOINT = "http://10.100.166.233:5005/monitor" 
 
 ## TODO put in config file:
 EXEC="arx-java-code/dist/PRIVAaaSAllInOneJar.jar"
 
-
+DEBUG=False
 
 
 
@@ -123,7 +124,7 @@ class Probe:
     def send_to_monitor(self, dataReceived):
 
         message = Message(probeId=PROBE_ID,
-                         resourceId=101098,
+                         resourceId=RESOURCE_ID,
                          messageId=0,
                          sentTime=int(time.time()),
                          data=None);
@@ -171,12 +172,8 @@ class Probe:
         ## Data in json struct:
         jsonData = json.dumps(message.reprJSON(), cls=ComplexEncoder);
 
-
-        print jsonData
         valRet = self.__communication.send_message(jsonData);
         return valRet;
-
-
 ## END OF CLASS.
 
 
@@ -240,6 +237,7 @@ class Instance_Privaaas(Process):
     def execute(self, k):
 
         if self.storedK >= k:
+            log("Nothing more to do, the k value is enough!");
             self.status = FINISHED;
         else:    
             self.storedK = k;
@@ -270,6 +268,11 @@ class Instance_Privaaas(Process):
 
             ## Send to monitor the metrics.
             if self.metrics != {}:
+               
+                ## Debug:
+                if DEBUG == True:
+                    log(self.metrics);
+
                 messageToMonitor = {
                     "k"      : self.metrics['k'],
                     "riskJ"  : self.metrics['risk_journalist'],
@@ -410,7 +413,7 @@ class Handle_PrivaaaS(Process):
         def status():
 
             ## Load json file:
-            inputReceived = request.get_json(force=True);
+            inputReceived = json.loads(request.get_json(force=True));
 
             try:
                 instanceID = inputReceived['instanceID'];
@@ -439,15 +442,16 @@ class Handle_PrivaaaS(Process):
         ## ----------------------------------------------------------------- ##
         ## UPDATE K request:
         ## ----------------------------------------------------------------- ##
-        @webApp.route('/update_k', methods=['POST'])
-        def update_k():
+        @webApp.route('/actuator', methods=['POST'])
+        def actuator():
             try:
                 cipherMessage = request.data;
             except:
+                log("Problem to get cipher message...");
                 return "Error!";
 
             ## Get the private key value:
-            key = RSA.importKey(open('./encode_decode_key').read());
+            key = RSA.importKey(open('keys/encode_decode_key').read());
 
             ## Create a new objetc that handle de criptographic key:
             cipher = PKCS1_OAEP.new(key);
@@ -458,11 +462,11 @@ class Handle_PrivaaaS(Process):
             message = json.loads(jsonMessage);
 
             ## Get real data:
-            instanceID = message['configuration']['instanceID'];
-            newK       = message['configuration']['k'];
+            instanceID = int(message['instanceId']);
+            newK       = int(message['k']);
 
             ## Get the instanceID status:
-            valRet = self.__update_k(instanceID, newK);
+            valRet = self.__actuator(instanceID, newK);
 
             ## Return Json result:
             return json.dumps(valRet);
@@ -513,10 +517,8 @@ class Handle_PrivaaaS(Process):
     ## @PARAM instanceId == instance identificator.
     ## @PARAM k          == k to be used.
     ##
-    def __update_k(self, instanceID, k):
+    def __actuator(self, instanceID, k):
         statusReturn = ERROR;
-
-        instanceID = int(instanceID);
 
         ## Check if the requestId exist in system (other instace with same re-
         ## quest id is running.
@@ -648,7 +650,11 @@ class Handle_PrivaaaS(Process):
 ## MAIN                                                                      ##
 ###############################################################################
 if __name__ == "__main__":
-#    """
+
+    print "---------------------------------------------------------------"
+    print "PRIVAAaS Rest                                                  "
+    print "---------------------------------------------------------------"
+
     try:
         main = Handle_PrivaaaS();
         main.run();
@@ -660,16 +666,4 @@ if __name__ == "__main__":
         main.purge();
 
     sys.exit(0);
-#    """
-    probe = Probe()
-    messageToMonitor = {
-                    "k"      : 10,
-                    "riskJ"  : 0.004545454545454545,
-                    "riskM"  : 0.004545454545454545,
-                    "riskP"  : 0.004545454545454545,
-                    "lScore" : 0.004545454545454545,
-                    "id"     : 1
-    };
-    probe.send_to_monitor(messageToMonitor)
-
 ## EOF.

@@ -31,7 +31,6 @@ WEB_PORT   = "9000";
 
 
 
-
 ###############################################################################
 ## PROCEDURES                                                                ##
 ###############################################################################
@@ -42,8 +41,7 @@ WEB_PORT   = "9000";
 ##
 def log(text):
     ## Print text:
-    #print text;
-    pass
+    print text;
 ## END.
 
 
@@ -146,6 +144,7 @@ class Main:
                 };
 
                 valRet = self.__sendCurlPost(json.dumps(dataToSend),"/status");
+                valRet = json.loads(valRet);
             else:
                 self.__usage("InstanceID in incorrect format!");
         else:

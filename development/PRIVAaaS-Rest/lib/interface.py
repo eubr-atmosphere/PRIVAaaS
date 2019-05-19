@@ -24,6 +24,15 @@ import json;
 SUCCESS=0
 PROBLEM=1
 
+SUCCESS    = 0x0000;
+FINISHED   = 0x0001;
+DONT_EXIST = 0x0002;
+EXIST      = 0x0003;
+RUNNING    = 0x0010;
+GET_RESULT = 0x0011;
+GET_K      = 0x0012;
+ERROR      = 0x0013;
+FAILED     = 0x0014;
 
 
 
@@ -86,7 +95,16 @@ class Show_in_Shell:
     ## @PARAM arguments == arguments to show.
     ##
     def status(self, arguments):
-        print arguments
+        if   int(arguments['status']) == FINISHED:
+            print "Finished!"
+
+        elif int(arguments['status']) == RUNNING :
+            print "Running!!"
+
+        elif int(arguments['status']) == FAILED  :
+            print "Failed!!!"
+        else:
+            print arguments;
 
 
     ##

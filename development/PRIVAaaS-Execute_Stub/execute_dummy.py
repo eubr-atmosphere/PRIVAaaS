@@ -19,7 +19,9 @@ import subprocess;
 import time;
 import requests;
 import mysql.connector;
+import pycurl;
 
+from StringIO         import StringIO;
 from mysql.connector  import errorcode;
 from Crypto.PublicKey import RSA;
 from Crypto.Cipher    import PKCS1_OAEP;
@@ -40,13 +42,13 @@ from json             import loads;
 ###############################################################################
 KAFKA_AUTO_OFFSET_RESET = 'earliest';
 KAFKA_AUTO_COMMIT       = True;
-KAFKA_ADDRESS           = "10.0.0.88:9093";
-KAFKA_TOPIC_RECV        = "topic-privaaas-execute";
+KAFKA_ADDRESS           = "kafka-0.kafka-hs.default.svc.cluster.local:9093";
+KAFKA_TOPIC_RECV        = "topic-execute";
 KAFKA_GROUPID           = "privaaas";
 
-DB_USER = 'privaaas';
-DB_PASS = '123mudar';
-DB_HOST = '10.0.0.90'
+DB_USER = 'root';
+DB_PASS = 'passtobereplaced';
+DB_HOST = '10.98.170.151'
 DB_NAME = 'knowledge';
 
 
@@ -86,11 +88,12 @@ class Queue_Listen:
     ## ------------------------------------------------------------------------
     ##
     def __init__(self):
+
         print "---------------------------------------------------------------"
         print "TMA Execute Stub                                               "
         print "---------------------------------------------------------------"
-
         self.consumer = self.__kafka_consumer();
+         
         if not self.consumer:
             sys.exit(-1);
 
@@ -104,13 +107,14 @@ class Queue_Listen:
     ##
     def run(self):
         while self.execute:
+           print "Waiting message..."
            message = self.consumer.poll();
-         
+
            ## Get message data:
            msgContent = message.value();
 
            ## Message Received:
-           print "Message Receveid From Planning: " + str(msgContent);
+           print "Message Received From Planning: " + str(msgContent);
 
            if msgContent != '' and msgContent != "Broker: No more messages":
                self.__send_message(msgContent);
@@ -146,28 +150,11 @@ class Queue_Listen:
     ## @PARAM message == message to send.
     ##
     def __send_message(self, jsonMessage=''):
-       try:   
-           message = json.loads(jsonMessage);
-       except:
-           return -1;
 
-       ## Extract apropriate fields:
-       actuatorID = message["actuatorId"   ];
-       actionID   = message["actionId"     ];
-       resourceID = message["resourceId"   ];
-       value      = message["configuration"];
-
-       query  = "SELECT actionName FROM Action where actionId="
-       query += actionID;
-       
-       ## Select:
-       valRet = self.__select_database(query);
-
-       actionDescription = valRet[0];
+       print "Getting the cipher keys...";
 
        ## Create message to send:
-       query  = "select address,pubKey from Actuator where actuatorId=";
-       query += actuatorID;
+       query = "select address,pubKey from Actuator where actuatorId=1";
 
        ## Select:
        valRet = self.__select_database(query);
@@ -177,38 +164,41 @@ class Queue_Listen:
        address = valRet[0];
        rsaKey  = valRet[1];
 
-       message = {}
-       message['resourceId'   ] = resourceID;
-       message['messageId'    ] = self.__count;
-       message['timestamp'    ] = time.time(); 
-       message['action'       ] = actionDescription;
-       message['configuration'] = value;
-
-       self.__count += 1;
- 
-       jsonMessage = json.dumps(message);
-
        key        = RSA.importKey(rsaKey)
        cipher     = PKCS1_OAEP.new(key)
        cipherText = cipher.encrypt(jsonMessage)
 
        ## Message:
-       print "Sending message to Actuator: " + str(message);
+       print "Sending message to Actuator...";
 
        ## Send to destiny:
-       self.__sendToDestiny(cipherText,address);
-
+       self.__sendToDestiny(address, cipherText);
        return 0;
 
 
     ##
     ## BRIEF: post the messagem.
     ## ------------------------------------------------------------------------
-    ## @PARAM cipherMessage == message cryptographed;
     ## @PARAM address       == actuator endpoint.
+    ## @PARAM cipherMessage == message cryptographed;
     ##
-    def __sendToDestiny(self, cipherMessage, address):
-       valRet = requests.post(address, data=cipherMessage);
+    def __sendToDestiny(self, address, cipherMessage):
+       curlRequest = pycurl.Curl();
+       buffer = StringIO()
+
+       curlRequest.setopt(curlRequest.URL, "127.0.0.1:9000/actuator");
+       curlRequest.setopt(pycurl.HTTPHEADER, ['Accept: application/json']);
+       curlRequest.setopt(pycurl.POST, 1);
+       curlRequest.setopt(pycurl.POSTFIELDS, cipherMessage);
+       curlRequest.setopt(pycurl.WRITEFUNCTION, buffer.write);
+       curlRequest.perform();
+       curlRequest.close();
+
+       bodyAnswer = buffer.getvalue();
+       buffer.close();
+
+       return bodyAnswer;
+
 
 
     ##
