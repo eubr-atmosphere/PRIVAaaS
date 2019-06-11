@@ -150,6 +150,9 @@ class Main:
         else:
             self.__usage("InstanceID not found!");
 
+        ## Instance ID:
+        valRet['id'] = arguments[0];
+
         return valRet;
 
 

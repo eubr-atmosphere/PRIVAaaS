@@ -32,6 +32,8 @@ from lib.data          import Data;
 from lib.message       import Message, ComplexEncoder;
 from lib.observation   import Observation;
 from lib.communication import Communication;
+from lib.configuration import Configparse;
+
 
 
 
@@ -53,25 +55,23 @@ GET_K      = 0x0012;
 ERROR      = 0x0013;
 FAILED     = 0x0014;
 
-WEB_DEBUG  = "False";
-WEB_BIND   = "127.0.0.1";
-WEB_PORT   = 9000;
-
-PROBE_ID = 8
-RESOURCE_ID = 8
-
 DCODE_1 = 30;
 DCODE_2 = 31;
 DCODE_3 = 32;
 DCODE_4 = 33;
 DCODE_5 = 34;
 DCODE_6 = 35;
-MONITOR_ENDPOINT = "http://10.100.166.233:5005/monitor" 
 
 ## TODO put in config file:
 EXEC="arx-java-code/dist/PRIVAaaSAllInOneJar.jar"
 
 DEBUG=False
+
+CONF_NAME = "conf/privaaasd.ini"
+
+
+
+
 
 
 
@@ -109,13 +109,18 @@ class Probe:
     ## ATTRIBUTES                                                            ##
     ###########################################################################
     __communication = None;
+    __probeId       = None;
+    __resourceId    = None;
 
 
     ###########################################################################
     ## SPECIAL METHODS                                                       ##
     ###########################################################################
-    def __init__(self):
-        self.__communication = Communication(MONITOR_ENDPOINT);
+    def __init__(self, probeCfg, endpoint):
+        self.__communication = Communication(endpoint);
+
+        self.__resourceId = int(probeCfg["resourceid"]);
+        self.__probeId    = int(probeCfg["probeid"   ]);
 
 
     ###########################################################################
@@ -123,8 +128,8 @@ class Probe:
     ###########################################################################
     def send_to_monitor(self, dataReceived):
 
-        message = Message(probeId=PROBE_ID,
-                         resourceId=RESOURCE_ID,
+        message = Message(probeId=self.__probeId,
+                         resourceId=self.__resourceId,
                          messageId=0,
                          sentTime=int(time.time()),
                          data=None);
@@ -194,18 +199,22 @@ class Instance_Privaaas(Process):
     ## ATTRIBUTES                                                            ##
     ###########################################################################
     status         = RUNNING;
+    __countRunned  = 0;
     __instanceID   = None;
     __policy       = None;
     __rwdata       = None;
-    storedK        = -1;
+    __storedK      = -1;
+    __storedRiskP  = 1000;
     anonymizedData = None;
     probe          = None;
+    data           = None;
+    __countdown    = None;
    
 
     ###########################################################################
     ## SPECIAL METHODS                                                       ##
     ###########################################################################
-    def __init__(self, instanceID, rwdata, policy):
+    def __init__(self, instanceID, rwdata, policy, probeCfg, endpoint):
         super(Instance_Privaaas, self).__init__();
 
         ## Set instance ID:
@@ -214,7 +223,19 @@ class Instance_Privaaas(Process):
         self.__rwdata = rwdata;
         self.__policy = policy;
 
-        self.probe = Probe();
+        self.probe = Probe(probeCfg, endpoint);
+
+        ## To use to finish:
+        self.__countdown = int(probeCfg["countdown"]);
+
+        self.dataState = {
+            "count":0,
+            "orgK" :0,
+            "oldK" :-1,
+            "newK" :0,
+            "oldR" :1000,
+            "newR" :0
+        };
 
 
     ###########################################################################
@@ -233,58 +254,69 @@ class Instance_Privaaas(Process):
     ##
     ## BRIEF: execute command.
     ## ------------------------------------------------------------------------
+    ## @PARAM k == k value.
     ##
     def execute(self, k):
 
-        if self.storedK >= k:
-            log("Nothing more to do, the k value is enough!");
-            self.status = FINISHED;
-        else:    
-            self.storedK = k;
-            csvData = csv.reader(self.__rwdata);
+        ## Obtain the k value:
+        if self.dataState['count'] == 0:
+            self.dataState['orgK'] = k;
 
-            ## Get lines number from buffer;
-            bashCommand = [];
-            bashCommand.append("java");
-            bashCommand.append("-jar");
-            bashCommand.append(EXEC);
-            bashCommand.append(json.dumps(self.__policy));
-            bashCommand.append(str(self.storedK));
+        csvData = csv.reader(self.__rwdata);
 
-            ## Command:
-            process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
+        ## Get lines number from buffer;
+        bashCommand = [];
+        bashCommand.append("java");
+        bashCommand.append("-jar");
+        bashCommand.append(EXEC);
+        bashCommand.append(json.dumps(self.__policy));
+        bashCommand.append(str(k));
+
+        ## Command:
+        process = subprocess.Popen(bashCommand, stdout=subprocess.PIPE,
                                            stdin=subprocess.PIPE, shell=False);
         
-            for line in csvData:
-                process.stdin.write(line[0]+"\n");
+        for line in csvData:
+            process.stdin.write(line[0]+"\n");
 
-            output, error = process.communicate();
+        output, error = process.communicate();
         
-            process.stdin.close();
-            process.stdout.close();
+        process.stdin.close();
+        process.stdout.close();
 
-            self.__parse_return(output, error);
-            self.__rwdata.seek(0);
+        self.__parse_return(output, error);
+        self.__rwdata.seek(0);
 
-            ## Send to monitor the metrics.
-            if self.metrics != {}:
+        ## Send to monitor the metrics.
+        if self.metrics != {}:
+
+            ## Stop criteria:
+            if self.dataState['oldK'] >= k or self.dataState['oldR'] <= self.metrics['risk_prosecutor']:
+                log("Nothing more to do, the k and risk value are enough!");
+                self.status = FINISHED;
+                return SUCCESS;
                
-                ## Debug:
-                if DEBUG == True:
-                    log(self.metrics);
+            ## Debug:
+            if DEBUG == True:
+                log(self.metrics);
 
-                messageToMonitor = {
-                    "k"      : self.metrics['k'],
-                    "riskJ"  : self.metrics['risk_journalist'],
-                    "riskM"  : self.metrics['risk_marketer'  ],
-                    "riskP"  : self.metrics['risk_prosecutor'],
-                    "lScore" : self.metrics['low_score'],
-                    "id"     : self.__instanceID
-                };
+            messageToMonitor = {
+                "k"      : self.metrics['k'],
+                "riskJ"  : self.metrics['risk_journalist'],
+                "riskM"  : self.metrics['risk_marketer'  ],
+                "riskP"  : self.metrics['risk_prosecutor'],
+                "lScore" : self.metrics['low_score'],
+                "id"     : self.__instanceID
+            };
 
-                self.probe.send_to_monitor(messageToMonitor);
-            else:
-                return ERROR;
+            valRet = self.probe.send_to_monitor(messageToMonitor);
+
+            self.dataState['oldR'] = self.metrics['risk_prosecutor'];
+            self.dataState['oldK'] = k;
+        else:
+            return ERROR;
+
+        self.dataState['count'] += 1;
 
         return SUCCESS;
 
@@ -334,14 +366,42 @@ class Handle_PrivaaaS(Process):
     ## ATTRIBUTES                                                            ##
     ###########################################################################
     __instances = {};
-    webApp         = None;
-    __uuid         = 0;
-
+    webApp      = None;
+    __uuid      = 0;
+    __webBind   = None;
+    __webPort   = None;
+    __probeCfg  = None;
+    __endpoint  = None;
 
 
     ###########################################################################
     ## SPECIAL METHODS                                                       ##
     ###########################################################################
+    def __init__(self, configName):
+        ## Config parse:
+        confParse = Configparse(configName);
+
+        ## Get configuration dictionary:
+        dictConfg = confParse.get_config();
+
+        ## Dict:
+        self.__webBind = dictConfg["rest_server"]["addr"];
+        self.__webPort = dictConfg["rest_server"]["port"];
+
+        ## Log:
+        self.__debug   = dictConfg["log"]["debug"];
+
+        ## Monitor endpoint:
+        ssl  = dictConfg["monitor"]["ssl" ];
+        addr = dictConfg["monitor"]["addr"];
+        port = dictConfg["monitor"]["port"];
+        if ssl == "True":
+            self.__endpoint ="https://"+str(addr)+":"+str(port)+"/monitor";
+        else:
+            self.__endpoint = "http://"+str(addr)+":"+str(port)+"/monitor";
+
+        ## Probe:
+        self.__probeCfg = dictConfg["probe"];
 
 
     ###########################################################################
@@ -439,6 +499,7 @@ class Handle_PrivaaaS(Process):
             ## Return Json result:
             return json.dumps(valRet);
 
+
         ## ----------------------------------------------------------------- ##
         ## UPDATE K request:
         ## ----------------------------------------------------------------- ##
@@ -471,9 +532,8 @@ class Handle_PrivaaaS(Process):
             ## Return Json result:
             return json.dumps(valRet);
 
-
         ## Run app:
-        webApp.run(host=WEB_BIND, port=WEB_PORT);
+        webApp.run(host=self.__webBind, port=int(self.__webPort));
         return 0;
 
 
@@ -499,7 +559,9 @@ class Handle_PrivaaaS(Process):
         if self.__check_exist(instanceID) != EXIST:
             self.__instances[instanceID]=Instance_Privaaas(instanceID,
                                                            rwdata,
-                                                           policy);
+                                                           policy,
+                                                           self.__probeCfg,
+                                                           self.__endpoint);
             self.__instances[instanceID].daemon = True;
             self.__instances[instanceID].start();
             self.__instances[instanceID].execute(k);
@@ -575,12 +637,14 @@ class Handle_PrivaaaS(Process):
 
         try:
             status = self.__instances[instanceID].status;
+            dState = self.__instances[instanceID].dataState;
         except:
             ## InstanceID not found in the enviroment, verify the ID.
             status = "notFound";
+            dState = {};
 
         ## Return the dictionary:   
-        return {"status":status};
+        return {"status":status, "dState":dState};
 
 
     ##
@@ -593,10 +657,14 @@ class Handle_PrivaaaS(Process):
         ## Get all instances running:
         for key in self.__instances.keys():
             if self.__instances[key].is_alive() == True:
-                dictReturn[key] = "running";
+                if self.__instances[key].status == FINISHED:
+                    dictReturn[key] = "finished";
+                else:
+                    dictReturn[key] = "running" ;
             else:
                 dictReturn[key] = "finished";
 
+        print dictReturn;
         return dictReturn;
 
 
@@ -656,7 +724,8 @@ if __name__ == "__main__":
     print "---------------------------------------------------------------"
 
     try:
-        main = Handle_PrivaaaS();
+        ## Config name:
+        main = Handle_PrivaaaS(CONF_NAME);
         main.run();
 
     except ValueError as exceptionNotice:

@@ -95,16 +95,37 @@ class Show_in_Shell:
     ## @PARAM arguments == arguments to show.
     ##
     def status(self, arguments):
+        
+        
+        print "---------------------------------------------------"
+        print "Instance " + str(arguments["id"]) + " status:"
+        print "---------------------------------------------------"
+ 
+        try:
+            print "Number of interation in MAPE-K: " + str(arguments["dState"]["count"]);
+            print "K received....................: " + str(arguments["dState"]["orgK" ]);
+            print "Calculate K...................: " + str(arguments["dState"]["oldK" ]);
+            print "Risk..........................: " + str(arguments["dState"]["oldR" ]);
+        except:
+            print "Number of interation in MAPE-K: ?";
+            print "K received....................: ?";
+            print "Calculate K...................: ?";
+            print "Risk..........................: ?";
+
+
         if   int(arguments['status']) == FINISHED:
-            print "Finished!"
+            print "Status........................: Finished!"
 
         elif int(arguments['status']) == RUNNING :
-            print "Running!!"
+            print "Status........................: Running!!"
 
         elif int(arguments['status']) == FAILED  :
-            print "Failed!!!"
+            print "Status........................: Failed!!!"
         else:
             print arguments;
+            print "Status........................: Unknow error.."
+
+        print "---------------------------------------------------"
 
 
     ##
