@@ -1,1 +1,0 @@
-mvn install:install-file -DgroupId=arx -DartifactId=libarx -Dversion=3.5.1 -Dpackaging=jar -DgeneratePom=true -Dfile=libarx-3.5.1.jar
