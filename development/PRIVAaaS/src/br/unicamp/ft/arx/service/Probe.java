@@ -148,7 +148,12 @@ public class Probe {
                 DataInputStream is = new DataInputStream(
                               new BufferedInputStream(client.getInputStream()));
                 
-                k = Integer.parseInt(is.readLine());
+                String valRet = is.readLine();
+                
+                Float kTempFloat = Float.parseFloat(valRet);
+                
+                // Convert to int:
+                k = Math.round(kTempFloat);
                 client.close();
             }
             catch (SocketException e) {

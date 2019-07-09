@@ -8,6 +8,9 @@ import java.io.FileOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.sql.*;
 
 import javax.json.*;
@@ -54,7 +57,9 @@ public class Anonymizer extends Probe {
     public static final int PUBLISH_ERROR = -3;
     public static final int SOCKETL_ERROR = -2;
     public static final int TIMEOUT_ERROR = -1;
-    
+
+
+    private final static Logger log = LogManager.getLogger(Anonymizer.class);    
     
     /*
      **************************************************************************
@@ -101,6 +106,8 @@ public class Anonymizer extends Probe {
     */
     public static void main(String[] args) throws Exception, IOException {
     
+        
+        
         String saveInFile = "";
         String datadbFile = "";
         String policyFile = "";
@@ -135,27 +142,23 @@ public class Anonymizer extends Probe {
             if (obj.publish == true) {
                 int newK = 0;
             
-                while (newK != DONT_FINISHED) {
+                while (newK != DONT_FINISHED) {                    
+                    log.info("Send informations to monitor!");
+
                     /* If configured in the config file, publish the results to
                        monitor. */
                     newK = obj.publish_message_monitor();
 
                     if(newK == PUBLISH_ERROR) {
-                        System.out.println("Wasn't possible publish infos!");
+                        log.info("Wasn't possible publish data!");
                         break;
                     }
                     else {
-                        System.out.println("Send informations to monitor!!");
-                    
-                        if (newK == TIMEOUT_ERROR || newK == SOCKETL_ERROR) {
-                            System.out.println("Problem with the actuator!");
-                            break;
-                        }
-                    
-                        /* If receive newk from actuator. So re-execute the ano
-                           nymize*/
-                        if (obj.k != newK) {       
-                            System.out.println("New K value received: "+newK);
+                        log.info("Old K: " + obj.k);
+                        
+                        /* If receive newk from actuator, reexecute. */
+                        if (newK > obj.k) {       
+                            log.info("New K value received from mape-K: "+newK);
                         
                             /* Prepare k: */
                             obj.prepare_source(datadbFile, policyFile);
@@ -163,8 +166,13 @@ public class Anonymizer extends Probe {
                             obj.run();
                         }
                         else {
-                            System.out.println("End of loop!");
-                            break;
+                           if (newK == TIMEOUT_ERROR || newK == SOCKETL_ERROR) {
+                               log.error("Problem with the actuator!");
+                           }
+                           else {
+                               log.error("End of loop!");
+                           }
+                           break;
                         }
                     }
                 }
@@ -279,7 +287,7 @@ public class Anonymizer extends Probe {
         }
         catch (java.lang.IllegalArgumentException e) {
             if (this.screen == true) {
-                System.err.println("Column not found: " + e + "\nTrace:");
+                log.error("Column not found: " + e + "\nTrace:");
                 e.printStackTrace();
                 System.exit(-1);
             }
@@ -321,7 +329,7 @@ public class Anonymizer extends Probe {
             
         } catch (java.lang.IllegalArgumentException e) {
             if (this.screen == true) {
-                System.err.println("Errors were found: " + e + "\nTrace:");
+                log.error("Errors were found: " + e + "\nTrace:");
                 e.printStackTrace();
                 System.exit(-1);
             }
@@ -433,34 +441,34 @@ public class Anonymizer extends Probe {
         /* Calculate the score. */
         String score = this.__lScore + "|" + this.__hScore;
         
-        System.out.println("                                                 ");
-        System.out.println("-- OUTPUT DATA                                   ");
-        System.out.println("================================================ ");
-        System.out.println("- Mixed Risk                                     ");
-        System.out.println("*Prosecutor re-identification risk: "+this.__riskP);
-        System.out.println("*Journalist re-identification risk: "+this.__riskJ);
-        System.out.println("*Marketer   re-identification risk: "+this.__riskM);
-        System.out.println("*K anonimity .....................: "+this.k      );
-        System.out.println("                                    ");
-        System.out.println("- Information Loss                  ");
-        System.out.println("*.................................: "+score);
-        System.out.println("                                    ");
-        System.out.println("- Statistics                        ");
-        System.out.println("*.................................: " + this.__equivalenceClasses);
-        System.out.println("                                    ");        
-        System.out.println("- Data:                             ");
-        System.out.println("* ................................: "+numRows);
-        System.out.println("                                    ");
-        System.out.println("- Policies available                ");
-        System.out.println("*.................................: " + v1);
-        System.out.println("                                    ");
-        System.out.println("- Solution                          ");
-        System.out.println("* .................................:" + v2);
-        System.out.println("* Optimal..........................:" + v3);
-        System.out.println("* Time needed......................:" + v4);
-        System.out.println("========================================" );
-        System.out.println("Done!");
-        System.out.println("*** Total Execution Time: "
+        log.info("                                                 ");
+        log.info("-- OUTPUT DATA                                   ");
+        log.info("================================================ ");
+        log.info("- Mixed Risk                                     ");
+        log.info("*Prosecutor re-identification risk: "+this.__riskP);
+        log.info("*Journalist re-identification risk: "+this.__riskJ);
+        log.info("*Marketer   re-identification risk: "+this.__riskM);
+        log.info("*K anonimity .....................: "+this.k      );
+        log.info("                                    ");
+        log.info("- Information Loss                  ");
+        log.info("*.................................: "+score);
+        log.info("                                    ");
+        log.info("- Statistics                        ");
+        log.info("*.................................: " + this.__equivalenceClasses);
+        log.info("                                    ");        
+        log.info("- Data:                             ");
+        log.info("* ................................: "+numRows);
+        log.info("                                    ");
+        log.info("- Policies available                ");
+        log.info("*.................................: " + v1);
+        log.info("                                    ");
+        log.info("- Solution                          ");
+        log.info("* .................................:" + v2);
+        log.info("* Optimal..........................:" + v3);
+        log.info("* Time needed......................:" + v4);
+        log.info("========================================" );
+        log.info("Done!");
+        log.info("*** Total Execution Time: "
                                  + (this.__stopTime - this.__startTime)+"[ms]");
     }  
     
@@ -493,7 +501,7 @@ public class Anonymizer extends Probe {
         }
         catch (Exception e) {
             if (this.screen == true) {
-                System.err.println("Error: " + e + "\nTrace:");
+                log.error("Error: " + e + "\nTrace:");
                 e.printStackTrace();
                 System.exit(-1);
             }
