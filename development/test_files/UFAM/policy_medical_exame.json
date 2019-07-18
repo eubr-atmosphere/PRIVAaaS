@@ -1,0 +1,12 @@
+{
+  "k":2,
+  "policy":[
+     {"field":"id"         , "data":"2"},
+     {"field":"appointment_id", "data":"2" },
+     {"field":"reason"     , "data":"4" },
+     {"field":"description", "data":"4"},
+     {"field":"exam_date"  , "data":"DT", "hierarchy_file":"/home/marcio/projetos/atmosphere_repository/PRIVaaS/development/PRIVAaaS/hierarchy/birthdate.csv"},
+     {"field":"exam_result", "data":"4"},
+     {"field":"status"     , "data":"1"}
+  ]
+}

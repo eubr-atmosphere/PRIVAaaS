@@ -1,0 +1,12 @@
+{
+  "k":2,
+  "policy":[
+     {"field":"id"              , "data":"2"},
+     {"field":"doctor_id"       , "data":"2" },
+     {"field":"patient_id"      , "data":"2" },
+     {"field":"appointment_date", "data":"DT", "hierarchy_file":"/Users/taniabasso/ATMOSPHERE/PRIVAaaS/PRIVAaaS/development/PRIVAaaS/hierarchy/birthdate.csv"},
+     {"field":"start_time"      , "data":"CT", "hierarchy_file":"/Users/taniabasso/ATMOSPHERE/PRIVAaaS/PRIVAaaS/development/PRIVAaaS/hierarchy/time.csv"},
+     {"field":"end_time"        , "data":"CT", "hierarchy_file":"/Users/taniabasso/ATMOSPHERE/PRIVAaaS/PRIVAaaS/development/PRIVAaaS/hierarchy/time.csv"},
+     {"field":"note"            , "data":"4"}
+  ]
+}

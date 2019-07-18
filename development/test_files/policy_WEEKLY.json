@@ -1,0 +1,11 @@
+{
+  "k":2,
+  "policy":[
+     {"field":"ZIPCODE" , "data":"SR"},
+     {"field":"DATETIME", "data":"1" },
+     {"field":"MIN"     , "data":"1" },
+     {"field":"MAX"     , "data":"SR"},
+     {"field":"COUNT"   , "data":"SR"},
+     {"field":"SUM"     , "data":"1" }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "k":10,
+  "policy":[
+     {"field":"id"             , "data":"1"},
+     {"field":"Class"          , "data":"1"},
+     {"field":"AGE"            , "data":"1"},
+     {"field":"SEX"            , "data":"1"},
+     {"field":"STEROID"        , "data":"1"},
+     {"field":"ANTIVIRALS"     , "data":"SR"},
+     {"field":"FATIGUE"        , "data":"1"},
+     {"field":"MALAISE"        , "data":"1"},
+     {"field":"ANOREXIA"       , "data":"1"},
+     {"field":"LIVER BIG"      , "data":"1"},
+     {"field":"LIVER FIRM"     , "data":"1"},
+     {"field":"SPLEEN PALPABLE", "data":"1"},
+     {"field":"SPIDERS"        , "data":"1"},
+     {"field":"ASCITES:"       , "data":"1"},
+     {"field":"VARICES"        , "data":"1"},
+     {"field":"BILIRUBIN"      , "data":"1"},
+     {"field":"ALK PHOSPHATE:" , "data":"1"},
+     {"field":"SGOT"           , "data":"1"},
+     {"field":"ALBUMIN"        , "data":"1"},
+     {"field":"PROTIME"        , "data":"1"},
+     {"field":"HISTOLOGY"      , "data":"1"}
+    ]
+}

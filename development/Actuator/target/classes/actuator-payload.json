@@ -1,0 +1,11 @@
+{
+    "action" : "scale",
+    "resourceId" : 3, 
+    "messageId": 44,
+    "timestamp": 1539608150,
+    "configuration": [
+        {"keyName": "metadata.namespace", "value": "default"},
+        {"keyName": "metadata.name", "value": "tma-analyze"},
+        {"keyName": "spec.replicas", "value": "6"}
+    ]
+}
