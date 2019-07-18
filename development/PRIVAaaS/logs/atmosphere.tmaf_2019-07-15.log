@@ -1,2 +1,0 @@
-[ERROR] 21:15:09.203 eubr.atmosphere.unicamp.Anonymizer.anonymize() - Errors were found: java.lang.IllegalArgumentException: You need to specify at least one quasi-identifier with generalization
-Trace:

@@ -1,6 +1,0 @@
-[INFO ] 23:38:17.929 eubr.atmosphere.unicamp.Anonymizer.run() - Send informations to monitor! Loop: 1
-[INFO ] 23:38:18.059 eu.atmosphere.tmaf.monitor.client.MonitorClient.<init>() - MonitorClient http://10.0.0.76:5005/monitor!
-[TRACE] 23:38:18.133 eu.atmosphere.tmaf.monitor.client.MonitorClient.<init>() - WebTarget created: JerseyWebTarget { http://10.0.0.76:5005/monitor }
-[TRACE] 23:38:18.135 eu.atmosphere.tmaf.monitor.client.MonitorClient.authenticate() - authenticate target: JerseyWebTarget { http://10.0.0.76:5005/monitor/auth }
-[WARN ] 23:38:18.136 eu.atmosphere.tmaf.monitor.client.MonitorClient.authenticate() - Authentication is yet to be supported.
-[TRACE] 23:38:18.139 eu.atmosphere.tmaf.monitor.client.MonitorClient.post() - Post: MonitorMessage{probeId:8, resourceId:1, messageId:9, sentTime:1563071898139, data:[Datum{type:measurement, descriptionId:1, observations:[{time:1563071897, value:10.0}]}, Datum{type:measurement, descriptionId:2, observations:[{time:1563071897, value:0.015625}]}, Datum{type:measurement, descriptionId:3, observations:[{time:1563071897, value:0.015625}]}, Datum{type:measurement, descriptionId:4, observations:[{time:1563071897, value:0.0019805715363576345}]}, Datum{type:measurement, descriptionId:5, observations:[{time:1563071897, value:0.3959297965122863}]}]}
