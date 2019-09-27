@@ -84,7 +84,8 @@ public class Probe {
         this.__socketPort = socketPort;
         
         SynchronousClient client = new SynchronousClient(endpoint);
-        client.authenticate(probeId, "pass".getBytes());
+
+        boolean valret = client.authenticate(probeId, "pass".getBytes());
 
         /* Create a new message to send to monitor: */
         Message message = client.createMessage();
@@ -116,6 +117,7 @@ public class Probe {
 
         while (count != max_loop) {                                
             try {
+                
 		/* Send the result to monitor. */
                 client.send(message);
 

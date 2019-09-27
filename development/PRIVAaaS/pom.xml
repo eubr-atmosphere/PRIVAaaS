@@ -49,10 +49,10 @@
 	   <artifactId>libarx</artifactId>
 	   <version>3.5.1</version>
 	</dependency>
-	<dependency>
-           <groupId>eu.atmosphere.tmaf</groupId>
-           <artifactId>monitor-client</artifactId>
-           <version>0.5</version>
+        <dependency>
+            <groupId>eu.atmosphere.tmaf</groupId>
+            <artifactId>java-client-lib</artifactId>
+           <version>0.2</version>
         </dependency>
 	<dependency>
            <groupId>eubr.atmosphere.tma</groupId>

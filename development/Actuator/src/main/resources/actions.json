@@ -1,0 +1,32 @@
+{
+  "actions": [
+    {
+      "action": "UPDATE",
+      "resourceId": 8,
+      "configuration": [
+        {
+          "key": "k",
+          "value": "float"
+        },
+        {
+          "key": "instanceId",
+          "value": "int"
+        }
+      ]
+    },
+    {
+      "action": "NONE",
+      "resourceId": 8,
+      "configuration": [
+        {
+          "key": "k",
+          "value": "float"
+        },
+        {
+          "key": "instanceId",
+          "value": "int"
+        }
+      ]
+    }
+  ]
+}
